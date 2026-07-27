@@ -1,0 +1,103 @@
+import { defineFrontendModules } from '../contract'
+
+export default defineFrontendModules([
+  {
+    id: 'operations.dashboard',
+    shell: 'console',
+    featureKey: 'operations.dashboard',
+    title: '运行概览',
+    order: 310,
+    core: false,
+    defaultEnabled: true,
+    permissions: ['dashboard:read'],
+    navigation: {
+      section: 'operations',
+      path: '/console/dashboard',
+      label: '运行概览',
+      badge: '概',
+    },
+    routes: [
+      {
+        path: 'dashboard',
+        name: 'console-dashboard',
+        component: () => import('../../views/DashboardView.vue'),
+      },
+    ],
+  },
+  {
+    id: 'operations.tasks',
+    shell: 'console',
+    featureKey: 'operations.tasks',
+    title: '任务与死信',
+    order: 320,
+    core: false,
+    defaultEnabled: true,
+    permissions: ['task:read'],
+    navigation: {
+      section: 'operations',
+      path: '/console/tasks',
+      label: '任务与死信',
+      badge: '任',
+    },
+    routes: [{ path: 'tasks', name: 'console-tasks', component: () => import('../../views/TasksView.vue') }],
+  },
+  {
+    id: 'operations.models',
+    shell: 'console',
+    featureKey: 'operations.models',
+    title: '模型配置',
+    order: 330,
+    core: false,
+    defaultEnabled: true,
+    permissions: ['model:read'],
+    navigation: {
+      section: 'operations',
+      path: '/console/models',
+      label: '模型配置',
+      badge: '模',
+    },
+    routes: [
+      { path: 'models', name: 'console-models', component: () => import('../../views/ModelsView.vue') },
+    ],
+  },
+  {
+    id: 'operations.storage',
+    shell: 'console',
+    featureKey: 'operations.storage',
+    title: '存储生命周期',
+    order: 340,
+    core: false,
+    defaultEnabled: true,
+    permissions: ['storage:read'],
+    navigation: {
+      section: 'operations',
+      path: '/console/storage',
+      label: '存储生命周期',
+      badge: '存',
+    },
+    routes: [
+      {
+        path: 'storage',
+        name: 'console-storage',
+        component: () => import('../../views/StorageView.vue'),
+      },
+    ],
+  },
+  {
+    id: 'operations.audit',
+    shell: 'console',
+    featureKey: 'operations.audit',
+    title: '调用与安全审计',
+    order: 350,
+    core: false,
+    defaultEnabled: true,
+    permissions: ['audit:call:read', 'audit:security:read'],
+    navigation: {
+      section: 'operations',
+      path: '/console/audit',
+      label: '调用与安全审计',
+      badge: '审',
+    },
+    routes: [{ path: 'audit', name: 'console-audit', component: () => import('../../views/AuditView.vue') }],
+  },
+])

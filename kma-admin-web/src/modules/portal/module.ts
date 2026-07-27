@@ -1,0 +1,145 @@
+import { defineFrontendModules } from '../contract'
+
+export default defineFrontendModules([
+  {
+    id: 'portal.home',
+    shell: 'portal',
+    featureKey: 'portal.home',
+    title: '知识门户',
+    order: 10,
+    core: true,
+    defaultEnabled: true,
+    permissions: ['content:read'],
+    navigation: { path: '/portal/home', label: '首页' },
+    routes: [
+      {
+        path: 'home',
+        name: 'portal-home',
+        component: () => import('../../views/portal/PortalHomeView.vue'),
+      },
+    ],
+  },
+  {
+    id: 'portal.library',
+    shell: 'portal',
+    featureKey: 'portal.library',
+    title: '资料中心',
+    order: 20,
+    core: false,
+    defaultEnabled: true,
+    permissions: ['content:read'],
+    navigation: { path: '/portal/library', label: '资料中心' },
+    routes: [
+      {
+        path: 'library',
+        name: 'portal-library',
+        component: () => import('../../views/portal/PortalLibraryView.vue'),
+      },
+    ],
+  },
+  {
+    id: 'portal.content',
+    shell: 'portal',
+    featureKey: 'portal.library',
+    title: '内容阅读',
+    order: 21,
+    core: false,
+    defaultEnabled: true,
+    permissions: ['content:read'],
+    routes: [
+      {
+        path: 'content/:contentId',
+        name: 'portal-content',
+        component: () => import('../../views/portal/PortalContentView.vue'),
+      },
+    ],
+  },
+  {
+    id: 'portal.qa',
+    shell: 'portal',
+    featureKey: 'portal.qa',
+    title: 'AI 问答',
+    order: 30,
+    core: false,
+    defaultEnabled: true,
+    permissions: ['qa:use'],
+    navigation: { path: '/portal/ask', label: 'AI 问答' },
+    routes: [
+      {
+        path: 'ask',
+        name: 'portal-ask',
+        component: () => import('../../views/portal/PortalAskView.vue'),
+      },
+    ],
+  },
+  {
+    id: 'portal.topics',
+    shell: 'portal',
+    featureKey: 'portal.topics',
+    title: '专题学习',
+    order: 40,
+    core: false,
+    defaultEnabled: true,
+    permissions: ['content:read'],
+    navigation: { path: '/portal/topics', label: '专题学习' },
+    routes: [
+      {
+        path: 'topics',
+        name: 'portal-topics',
+        component: () => import('../../views/portal/PortalTopicsView.vue'),
+      },
+    ],
+  },
+  {
+    id: 'portal.custom-page',
+    shell: 'portal',
+    featureKey: 'portal.custom-pages',
+    title: '自定义页面',
+    order: 45,
+    core: false,
+    defaultEnabled: true,
+    permissions: ['content:read'],
+    routes: [
+      {
+        path: 'page/:pageSlug',
+        name: 'portal-custom-page',
+        component: () => import('../../views/portal/PortalCustomPageView.vue'),
+      },
+    ],
+  },
+  {
+    id: 'portal.favorites',
+    shell: 'portal',
+    featureKey: 'portal.favorites',
+    title: '收藏历史',
+    order: 50,
+    core: false,
+    defaultEnabled: true,
+    permissions: ['content:read'],
+    navigation: { path: '/portal/favorites', label: '收藏历史' },
+    routes: [
+      {
+        path: 'favorites',
+        name: 'portal-favorites',
+        component: () => import('../../views/portal/PortalFavoritesView.vue'),
+      },
+    ],
+  },
+  {
+    id: 'portal.profile',
+    shell: 'portal',
+    featureKey: 'portal.profile',
+    title: '个人中心',
+    order: 1000,
+    core: true,
+    defaultEnabled: true,
+    permissions: [],
+    routes: [
+      {
+        path: 'profile',
+        name: 'portal-profile',
+        component: () => import('../../views/portal/PortalProfileView.vue'),
+      },
+    ],
+  },
+])

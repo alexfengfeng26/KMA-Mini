@@ -1,0 +1,15 @@
+target/
+.idea/
+.vscode/
+*.iml
+logs/
+upload/
+.env
+*.log
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+.DS_Store

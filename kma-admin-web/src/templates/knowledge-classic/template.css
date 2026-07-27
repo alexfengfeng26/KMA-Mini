@@ -1,0 +1,42 @@
+.cms-template--knowledge-classic {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 288px;
+  gap: 0 var(--portal-space-6);
+}
+
+.cms-template--knowledge-classic > .cms-block--hero-search,
+.cms-template--knowledge-classic > .cms-block--category-grid {
+  grid-column: 1 / -1;
+}
+
+.cms-template--knowledge-classic > .cms-block--recent-documents {
+  grid-column: 1;
+  grid-row: span 4;
+}
+
+.cms-template--knowledge-classic > .cms-block--current-topic,
+.cms-template--knowledge-classic > .cms-block--reading-history,
+.cms-template--knowledge-classic > .cms-block--favorites {
+  grid-column: 2;
+  align-self: start;
+  margin-top: var(--portal-space-2);
+}
+
+.cms-template--knowledge-classic > .cms-block--current-topic {
+  margin-top: var(--portal-space-9);
+}
+
+@media (width <= 980px) {
+  .cms-template--knowledge-classic {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-template--knowledge-classic > .cms-block {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .cms-template--knowledge-classic > .cms-block--current-topic {
+    margin-top: var(--portal-space-6);
+  }
+}

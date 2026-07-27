@@ -1,0 +1,171 @@
+server:
+  port: ${KMA_PORT:8090}
+  shutdown: graceful
+
+spring:
+  application:
+    name: kma-server
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-migration-naming: true
+  servlet:
+    multipart:
+      max-file-size: ${KMA_MAX_FILE_SIZE:100MB}
+      max-request-size: ${KMA_MAX_REQUEST_SIZE:100MB}
+knowledge:
+  enabled: true
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    jdbc-url: ${KMA_DB_URL:jdbc:postgresql://localhost:5432/kma_mini}
+    username: ${KMA_DB_USERNAME:kma}
+    password: ${KMA_DB_PASSWORD:}
+    maximum-pool-size: ${KMA_DB_POOL_MAX:20}
+    minimum-idle: ${KMA_DB_POOL_MIN:5}
+  storage:
+    type: ${KMA_STORAGE_TYPE:local}
+    path: ${KMA_STORAGE_PATH:upload/knowledge}
+    endpoint: ${KMA_STORAGE_ENDPOINT:}
+    access-key: ${KMA_STORAGE_ACCESS_KEY:}
+    secret-key: ${KMA_STORAGE_SECRET_KEY:}
+    bucket: ${KMA_STORAGE_BUCKET:kma-documents}
+    region: ${KMA_STORAGE_REGION:}
+    lifecycle-enabled: ${KMA_STORAGE_LIFECYCLE_ENABLED:true}
+    reconciliation-batch-size: ${KMA_STORAGE_RECONCILIATION_BATCH_SIZE:1000}
+    cleanup-batch-size: ${KMA_STORAGE_CLEANUP_BATCH_SIZE:100}
+    orphan-grace-hours: ${KMA_STORAGE_ORPHAN_GRACE_HOURS:24}
+  document:
+    max-pages: ${KMA_DOCUMENT_MAX_PAGES:1000}
+    max-extracted-chars: ${KMA_DOCUMENT_MAX_EXTRACTED_CHARS:5000000}
+    max-archive-entries: ${KMA_DOCUMENT_MAX_ARCHIVE_ENTRIES:10000}
+    max-uncompressed-bytes: ${KMA_DOCUMENT_MAX_UNCOMPRESSED_BYTES:536870912}
+    max-compression-ratio: ${KMA_DOCUMENT_MAX_COMPRESSION_RATIO:100}
+  ocr:
+    enabled: ${KMA_OCR_ENABLED:false}
+    base-url: ${KMA_OCR_BASE_URL:http://localhost:8866}
+    endpoint: ${KMA_OCR_ENDPOINT:/api/v1/ocr}
+    api-key: ${KMA_OCR_API_KEY:}
+    connect-timeout-seconds: ${KMA_OCR_CONNECT_TIMEOUT_SECONDS:5}
+    read-timeout-seconds: ${KMA_OCR_READ_TIMEOUT_SECONDS:120}
+  embedding:
+    rebuild-worker-enabled: ${KMA_EMBEDDING_REBUILD_WORKER_ENABLED:${KMA_INGESTION_WORKER_ENABLED:false}}
+    default-provider: ${KMA_EMBEDDING_PROVIDER:local-bge-m3}
+    base-url: ${KMA_EMBEDDING_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
+    model: ${KMA_EMBEDDING_MODEL:bge-m3}
+    dimension: ${KMA_EMBEDDING_DIMENSION:1024}
+    max-batch-size: ${KMA_EMBEDDING_BATCH_SIZE:16}
+    max-retry: ${KMA_EMBEDDING_MAX_RETRY:3}
+    api-key: ${KMA_EMBEDDING_API_KEY:}
+    fallback-providers: ${KMA_EMBEDDING_FALLBACK_PROVIDERS:}
+    local:
+      base-url: ${KMA_LOCAL_EMBEDDING_BASE_URL:http://localhost:9997/v1}
+      model: ${KMA_LOCAL_EMBEDDING_MODEL:bge-m3}
+      api-key: ${KMA_LOCAL_EMBEDDING_API_KEY:}
+      max-retry: ${KMA_LOCAL_EMBEDDING_MAX_RETRY:3}
+  llm:
+    default-provider: ${KMA_LLM_PROVIDER:ollama}
+    base-url: ${KMA_LLM_BASE_URL:https://api.deepseek.com/v1}
+    model: ${KMA_LLM_MODEL:deepseek-chat}
+    max-retry: ${KMA_LLM_MAX_RETRY:3}
+    api-key: ${KMA_LLM_API_KEY:}
+    fallback-providers: ${KMA_LLM_FALLBACK_PROVIDERS:}
+    local:
+      base-url: ${KMA_LOCAL_LLM_BASE_URL:http://localhost:11434/v1}
+      model: ${KMA_LOCAL_LLM_MODEL:qwen2.5}
+      api-key: ${KMA_LOCAL_LLM_API_KEY:ollama}
+      max-retry: ${KMA_LOCAL_LLM_MAX_RETRY:3}
+  rerank:
+    default-provider: ${KMA_RERANK_PROVIDER:bge-reranker-base}
+    base-url: ${KMA_RERANK_BASE_URL:}
+    api-key: ${KMA_RERANK_API_KEY:}
+  rag:
+    max-context-chars: ${KMA_RAG_MAX_CONTEXT_CHARS:12000}
+    max-context-tokens: ${KMA_RAG_MAX_CONTEXT_TOKENS:6000}
+    max-history-tokens: ${KMA_RAG_MAX_HISTORY_TOKENS:1000}
+    reserved-output-tokens: ${KMA_RAG_RESERVED_OUTPUT_TOKENS:1000}
+    max-history-messages: ${KMA_RAG_MAX_HISTORY_MESSAGES:6}
+    no-evidence-answer: ${KMA_RAG_NO_EVIDENCE_ANSWER:未在当前知识空间中找到足够依据，暂时无法可靠回答。}
+  feed:
+    enabled: ${KMA_FEED_ENABLED:false}
+    max-retry: ${KMA_FEED_MAX_RETRY:3}
+    initial-interval-seconds: 60
+    max-interval-seconds: 3600
+    batch-size: 10
+    fixed-delay: 30000
+  ingestion:
+    worker-enabled: ${KMA_INGESTION_WORKER_ENABLED:false}
+    max-retry: ${KMA_INGESTION_MAX_RETRY:3}
+    batch-size: ${KMA_INGESTION_BATCH_SIZE:4}
+    lease-seconds: ${KMA_INGESTION_LEASE_SECONDS:300}
+    initial-retry-seconds: ${KMA_INGESTION_INITIAL_RETRY_SECONDS:30}
+    max-retry-seconds: ${KMA_INGESTION_MAX_RETRY_SECONDS:1800}
+    fixed-delay: ${KMA_INGESTION_FIXED_DELAY:2000}
+  governance:
+    enabled: ${KMA_GOVERNANCE_ENABLED:false}
+    cron: ${KMA_GOVERNANCE_CRON:0 0 2 * * ?}
+    failed-doc-retention-days: 7
+  acl:
+    default-deny: ${KMA_ACL_DEFAULT_DENY:true}
+
+kma:
+  portal-sandbox-origin: ${KMA_PORTAL_SANDBOX_ORIGIN:}
+  portal-app-origin: ${KMA_PORTAL_APP_ORIGIN:'self'}
+  portal-extension:
+    # 仅供平台 CI 发布签名扩展包使用。
+    signing-key: ${KMA_PORTAL_EXTENSION_SIGNING_KEY:}
+  security:
+    mode: local
+    audience: ${KMA_AUTH_AUDIENCE:kma-api}
+    local-issuer: ${KMA_AUTH_LOCAL_ISSUER:kma-local}
+    local-secret: ${KMA_AUTH_JWT_SECRET:}
+    access-ttl-minutes: ${KMA_AUTH_ACCESS_TTL_MINUTES:15}
+    refresh-ttl-days: ${KMA_AUTH_REFRESH_TTL_DAYS:14}
+    requests-per-minute: ${KMA_RATE_LIMIT_PER_MINUTE:600}
+    login-requests-per-minute: ${KMA_LOGIN_RATE_LIMIT_PER_MINUTE:20}
+    idempotency-ttl-hours: ${KMA_IDEMPOTENCY_TTL_HOURS:24}
+    idempotency-lease-seconds: ${KMA_IDEMPOTENCY_LEASE_SECONDS:300}
+    idempotency-max-response-bytes: ${KMA_IDEMPOTENCY_MAX_RESPONSE_BYTES:1048576}
+    request-lease-seconds: ${KMA_REQUEST_LEASE_SECONDS:300}
+    content:
+      enabled: ${KMA_CONTENT_SECURITY_ENABLED:true}
+      block-prompt-injection: ${KMA_BLOCK_PROMPT_INJECTION:true}
+      redact-before-model: ${KMA_REDACT_BEFORE_MODEL:true}
+      redact-output: ${KMA_REDACT_MODEL_OUTPUT:true}
+      audit: ${KMA_CONTENT_SECURITY_AUDIT:true}
+    bootstrap:
+      username: ${KMA_BOOTSTRAP_ADMIN_USERNAME:admin}
+      password: ${KMA_BOOTSTRAP_ADMIN_PASSWORD:}
+      display-name: ${KMA_BOOTSTRAP_ADMIN_DISPLAY_NAME:KMA 管理员}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+      probes:
+        enabled: true
+      status:
+        order: down,out-of-service,unknown,degraded,up
+        http-mapping:
+          degraded: 200
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-}] %-5level %logger{50} - %msg%n"
+  file:
+    name: ${KMA_LOG_FILE:logs/kma.log}

@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kma.knowledge.mapper.KnowledgeChunkMapper">
+
+    <resultMap id="ChunkHitMap" type="com.kma.knowledge.entity.KnowledgeChunk">
+        <id property="chunkId" column="chunk_id"/>
+        <result property="docId" column="doc_id"/>
+        <result property="spaceId" column="space_id"/>
+        <result property="chunkIndex" column="chunk_index"/>
+        <result property="content" column="content"/>
+        <result property="charOffset" column="char_offset"/>
+        <result property="tokenCount" column="token_count"/>
+        <result property="sourceTag" column="source_tag"/>
+        <result property="embeddingModel" column="embedding_model"/>
+        <result property="meta" column="meta"/>
+        <result property="createTime" column="create_time"/>
+        <result property="docTitle" column="title"/>
+        <result property="externalRef" column="external_ref"/>
+        <result property="documentNumber" column="document_number"/>
+        <result property="issuingAuthority" column="issuing_authority"/>
+        <result property="publishDate" column="publish_date"/>
+        <result property="validityStatus" column="validity_status"/>
+        <result property="retrievalScore" column="retrieval_score"/>
+    </resultMap>
+
+    <delete id="deleteByDocId">
+        DELETE FROM knowledge_chunk WHERE doc_id = #{docId}
+    </delete>
+
+    <select id="searchByVector" resultMap="ChunkHitMap">
+        SELECT c.*, d.title, d.external_ref, d.document_number, d.issuing_authority,
+               d.publish_date, d.validity_status,
+        <choose>
+            <when test="dimension == 768">
+                1.0 - (e.embedding::vector(768) &lt;=&gt; #{embedding, typeHandler=com.kma.knowledge.config.PgvectorTypeHandler}) AS retrieval_score
+            </when>
+            <when test="dimension == 1536">
+                1.0 - (e.embedding::vector(1536) &lt;=&gt; #{embedding, typeHandler=com.kma.knowledge.config.PgvectorTypeHandler}) AS retrieval_score
+            </when>
+            <otherwise>
+                1.0 - (e.embedding::vector(1024) &lt;=&gt; #{embedding, typeHandler=com.kma.knowledge.config.PgvectorTypeHandler}) AS retrieval_score
+            </otherwise>
+        </choose>
+        FROM knowledge_chunk c
+        JOIN knowledge_doc d ON c.doc_id = d.doc_id
+        JOIN knowledge_chunk_embedding e ON e.chunk_id = c.chunk_id AND e.active = TRUE
+        WHERE c.space_id = #{spaceId}
+          AND d.is_active = TRUE
+          AND e.dimension = #{dimension}
+        <if test="profileCode != null and profileCode != ''">
+            AND e.profile_code = #{profileCode}
+        </if>
+        <if test="sourceTags != null and sourceTags.size() > 0">
+            AND c.source_tag IN
+            <foreach collection="sourceTags" item="tag" open="(" separator="," close=")">
+                #{tag}
+            </foreach>
+        </if>
+        <if test="filters != null and filters.portalOnly != null and filters.portalOnly">
+            AND d.publication_managed = TRUE AND d.workflow_status = 'published' AND d.online = TRUE
+            AND (d.validity_status &lt;&gt; 'effective' OR
+              ((d.effective_date IS NULL OR d.effective_date &lt;= CURRENT_DATE)
+               AND (d.expiry_date IS NULL OR d.expiry_date &gt;= CURRENT_DATE)))
+        </if>
+        <if test="filters != null and filters.contentTypes != null and filters.contentTypes.size() > 0">
+            AND d.content_type IN
+            <foreach collection="filters.contentTypes" item="value" open="(" separator="," close=")">#{value}</foreach>
+        </if>
+        <if test="filters != null and filters.validityStatuses != null and filters.validityStatuses.size() > 0">
+            AND d.validity_status IN
+            <foreach collection="filters.validityStatuses" item="value" open="(" separator="," close=")">#{value}</foreach>
+        </if>
+        <if test="filters != null and filters.docId != null">
+            AND d.doc_id = #{filters.docId}
+        </if>
+        <if test="filters != null and filters.topicCodes != null and filters.topicCodes.size() > 0">
+            AND EXISTS (SELECT 1 FROM knowledge_doc_topic dt JOIN knowledge_topic t
+              ON t.topic_id=dt.topic_id
+              WHERE dt.doc_id=d.doc_id AND t.topic_code IN
+              <foreach collection="filters.topicCodes" item="value" open="(" separator="," close=")">#{value}</foreach>)
+        </if>
+        ORDER BY retrieval_score DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="searchByFullText" resultMap="ChunkHitMap">
+        SELECT c.*, d.title, d.external_ref, d.document_number, d.issuing_authority,
+               d.publish_date, d.validity_status,
+               ts_rank_cd(c.search_vector, to_tsquery('simple', #{query})) AS retrieval_score
+        FROM knowledge_chunk c
+        JOIN knowledge_doc d ON c.doc_id = d.doc_id
+        WHERE c.space_id = #{spaceId}
+          AND d.is_active = TRUE
+          AND c.search_vector @@ to_tsquery('simple', #{query})
+        <if test="sourceTags != null and sourceTags.size() > 0">
+            AND c.source_tag IN
+            <foreach collection="sourceTags" item="tag" open="(" separator="," close=")">
+                #{tag}
+            </foreach>
+        </if>
+        <if test="filters != null and filters.portalOnly != null and filters.portalOnly">
+            AND d.publication_managed = TRUE AND d.workflow_status = 'published' AND d.online = TRUE
+            AND (d.validity_status &lt;&gt; 'effective' OR
+              ((d.effective_date IS NULL OR d.effective_date &lt;= CURRENT_DATE)
+               AND (d.expiry_date IS NULL OR d.expiry_date &gt;= CURRENT_DATE)))
+        </if>
+        <if test="filters != null and filters.contentTypes != null and filters.contentTypes.size() > 0">
+            AND d.content_type IN
+            <foreach collection="filters.contentTypes" item="value" open="(" separator="," close=")">#{value}</foreach>
+        </if>
+        <if test="filters != null and filters.validityStatuses != null and filters.validityStatuses.size() > 0">
+            AND d.validity_status IN
+            <foreach collection="filters.validityStatuses" item="value" open="(" separator="," close=")">#{value}</foreach>
+        </if>
+        <if test="filters != null and filters.docId != null">
+            AND d.doc_id = #{filters.docId}
+        </if>
+        <if test="filters != null and filters.topicCodes != null and filters.topicCodes.size() > 0">
+            AND EXISTS (SELECT 1 FROM knowledge_doc_topic dt JOIN knowledge_topic t
+              ON t.topic_id=dt.topic_id
+              WHERE dt.doc_id=d.doc_id AND t.topic_code IN
+              <foreach collection="filters.topicCodes" item="value" open="(" separator="," close=")">#{value}</foreach>)
+        </if>
+        ORDER BY retrieval_score DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>
+

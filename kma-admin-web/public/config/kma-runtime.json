@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "revision": "emerald-classic-v1",
+  "experience": {
+    "template": "knowledge-classic",
+    "theme": "emerald",
+    "density": "compact",
+    "modules": {},
+    "pages": {
+      "home": {
+        "template": "knowledge-classic",
+        "blocks": [
+          { "id": "hero", "type": "hero-search", "enabled": true, "variant": "compact" },
+          { "id": "categories", "type": "category-grid", "enabled": true, "variant": "cards" },
+          {
+            "id": "recent",
+            "type": "recent-documents",
+            "enabled": true,
+            "variant": "list",
+            "props": { "limit": 8 }
+          },
+          { "id": "topic", "type": "current-topic", "enabled": true, "variant": "card" },
+          {
+            "id": "history",
+            "type": "reading-history",
+            "enabled": true,
+            "variant": "compact",
+            "props": { "limit": 5 }
+          },
+          {
+            "id": "favorites",
+            "type": "favorites",
+            "enabled": true,
+            "variant": "compact",
+            "props": { "limit": 5 }
+          }
+        ]
+      }
+    },
+    "tokens": {
+      "colorPrimary": "oklch(48% 0.11 187)",
+      "colorPrimaryStrong": "oklch(34% 0.07 190)",
+      "colorPrimarySoft": "oklch(92% 0.038 175)",
+      "colorBackground": "oklch(97% 0.015 92)",
+      "colorSurface": "oklch(99% 0.008 92)",
+      "colorText": "oklch(28% 0.035 205)",
+      "colorTextMuted": "#536a6c",
+      "colorBorder": "oklch(88% 0.018 195)",
+      "fontBody": "'DM Sans Variable', 'Noto Sans SC', sans-serif",
+      "fontSizeBase": "14px",
+      "lineHeightBody": "1.6",
+      "radiusCard": "12px",
+      "radiusControl": "8px",
+      "shadowCard": "0 8px 30px oklch(30% 0.03 200 / 0.05)"
+    },
+    "assets": {}
+  }
+}

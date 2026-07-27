@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: kma_mini
+      POSTGRES_USER: kma
+      POSTGRES_PASSWORD: ${KMA_DB_PASSWORD:-kma}
+    ports:
+      - "5432:5432"
+    volumes:
+      - kma-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kma -d kma_mini"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  kma-server:
+    build: .
+    environment:
+      KMA_DB_URL: jdbc:postgresql://postgres:5432/kma_mini
+      KMA_DB_USERNAME: kma
+      KMA_DB_PASSWORD: ${KMA_DB_PASSWORD:-kma}
+      KMA_AUTH_JWT_SECRET: ${KMA_AUTH_JWT_SECRET:?必须设置 KMA_AUTH_JWT_SECRET}
+      KMA_BOOTSTRAP_ADMIN_PASSWORD: ${KMA_BOOTSTRAP_ADMIN_PASSWORD:?必须设置 KMA_BOOTSTRAP_ADMIN_PASSWORD}
+      KMA_LOCAL_EMBEDDING_BASE_URL: ${KMA_LOCAL_EMBEDDING_BASE_URL:-http://host.docker.internal:9997/v1}
+      KMA_LOCAL_LLM_BASE_URL: ${KMA_LOCAL_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
+    ports:
+      - "8090:8090"
+    volumes:
+      - kma-uploads:/app/upload/knowledge
+      - kma-logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  kma-pgdata:
+  kma-uploads:
+  kma-logs:

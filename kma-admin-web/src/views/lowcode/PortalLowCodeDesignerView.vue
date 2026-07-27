@@ -1,0 +1,1274 @@
+<script setup lang="ts">
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  createPortalDraft,
+  getPortalVersion,
+  listPortalCodePackages,
+  listPortalSites,
+  listPortalVersions,
+  portalVersionAction,
+  updatePortalDraft,
+} from '../../api/portalSites'
+import type { PortalCodePackage } from '../../api/portalSites'
+import type {
+  LayoutNode,
+  LowCodePage,
+  PortalBreakpoint,
+  PortalConfigVersion,
+  PortalSiteConfigV3,
+  PortalSiteSummary,
+} from '../../cms/siteConfig'
+import { isPortalSiteConfigV2, isPortalSiteConfigV3 } from '../../cms/siteConfig'
+import { cmsBlockDefinitions } from '../../cms/blockDefinitions'
+import { findNode, findParent, walkNodes } from '../../cms/v3/contract'
+import {
+  cloneNode,
+  duplicateNode,
+  insertNode,
+  moveNode,
+  removeNode,
+  uniqueNodeId,
+} from '../../cms/v3/designerTree'
+import { migratePortalConfigV2ToV3 } from '../../cms/v3/migrateV2'
+import { useAuthStore } from '../../stores/auth'
+import DesignerCanvasNode from './DesignerCanvasNode.vue'
+import PortalCodeEditorDrawer from './PortalCodeEditorDrawer.vue'
+
+type LeftMode = 'pages' | 'layers' | 'components' | 'symbols'
+type InspectorMode = 'layout' | 'content' | 'style' | 'data' | 'interaction'
+
+const auth = useAuthStore()
+const sites = ref<PortalSiteSummary[]>([])
+const versions = ref<PortalConfigVersion[]>([])
+const selectedSiteKey = ref('')
+const activeVersion = ref<PortalConfigVersion>()
+const config = ref<PortalSiteConfigV3>()
+const activePageSlug = ref('home')
+const selectedNodeId = ref('')
+const leftMode = ref<LeftMode>('pages')
+const inspectorMode = ref<InspectorMode>('layout')
+const breakpoint = ref<PortalBreakpoint>('desktop')
+const loading = ref(false)
+const saving = ref(false)
+const dirty = ref(false)
+const zoom = ref(90)
+const issues = ref<string[]>([])
+const history = ref<PortalSiteConfigV3[]>([])
+const future = ref<PortalSiteConfigV3[]>([])
+const restoring = ref(false)
+const codeDrawerOpen = ref(false)
+const codePackages = ref<PortalCodePackage[]>([])
+
+const canEdit = computed(
+  () =>
+    auth.permissions.has('kma:admin') ||
+    (auth.permissions.has('portal-page:edit') && auth.permissions.has('portal-site:update')),
+)
+const canPublish = computed(() => auth.hasAnyPermission(['portal-site:publish']))
+const activeSite = computed(() => sites.value.find((site) => site.siteKey === selectedSiteKey.value))
+const activePage = computed<LowCodePage | undefined>(() => {
+  if (!config.value) return undefined
+  if (activePageSlug.value === '$header')
+    return {
+      slug: '$header',
+      title: '全局页头',
+      kind: 'custom',
+      root: config.value.shell.header,
+    }
+  if (activePageSlug.value === '$footer')
+    return {
+      slug: '$footer',
+      title: '全局页脚',
+      kind: 'custom',
+      root: config.value.shell.footer,
+    }
+  return config.value.pages[activePageSlug.value]
+})
+const selectedNode = computed(() =>
+  activePage.value && selectedNodeId.value
+    ? findNode(activePage.value.root, selectedNodeId.value)
+    : undefined,
+)
+const selectedTitle = computed({
+  get: () =>
+    selectedNode.value?.type === 'component' && typeof selectedNode.value.props?.title === 'string'
+      ? selectedNode.value.props.title
+      : '',
+  set: (value: string) => {
+    if (selectedNode.value?.type !== 'component') return
+    selectedNode.value.props ||= {}
+    selectedNode.value.props.title = value
+  },
+})
+const nodeCount = computed(() => {
+  let count = 0
+  if (activePage.value) walkNodes(activePage.value.root, () => (count += 1))
+  return count
+})
+const canvasWidth = computed(() =>
+  breakpoint.value === 'desktop' ? 1440 : breakpoint.value === 'tablet' ? 1024 : 390,
+)
+const snapshotKey = computed(() => `kma-low-code-v3:${selectedSiteKey.value}`)
+const breadcrumbs = computed(() => {
+  const result: string[] = []
+  let current = selectedNode.value
+  while (current && activePage.value) {
+    result.unshift(current.name || current.id)
+    current = findParent(activePage.value.root, current.id)
+  }
+  return result
+})
+const layerNodes = computed(() => {
+  const result: Array<{ node: LayoutNode; depth: number }> = []
+  if (activePage.value) walkNodes(activePage.value.root, (node, depth) => result.push({ node, depth }))
+  return result
+})
+
+function checkpoint() {
+  if (!config.value || restoring.value) return
+  history.value.push(cloneNode(config.value))
+  if (history.value.length > 100) history.value.shift()
+  future.value = []
+}
+
+function normalizeEditableConfig(value: PortalSiteConfigV3) {
+  const normalize = (root: LayoutNode) =>
+    walkNodes(root, (node) => {
+      node.layout ||= {}
+      node.layout.span ||= { desktop: 12, tablet: 8, mobile: 4 }
+      node.layout.gap ||= { desktop: 16, tablet: 12, mobile: 12 }
+      node.layout.hidden ||= { desktop: false, tablet: false, mobile: false }
+      node.style ||= {}
+      node.style.padding ||= { desktop: 0, tablet: 0, mobile: 0 }
+      if (node.type === 'component') {
+        node.props ||= {}
+        node.dataSource ||= { source: 'static' }
+        node.actions ||= [{ event: 'click', type: 'analytics', config: {} }]
+      }
+    })
+  normalize(value.shell.header)
+  normalize(value.shell.footer)
+  Object.values(value.pages).forEach((page) => normalize(page.root))
+  Object.values(value.symbols).forEach((symbol) => normalize(symbol.root))
+  return value
+}
+
+function changed() {
+  dirty.value = true
+  issues.value = []
+}
+
+function mutate(operation: () => void) {
+  if (!config.value || !canEdit.value) return
+  checkpoint()
+  operation()
+  changed()
+}
+
+function undo() {
+  const previous = history.value.pop()
+  if (!previous || !config.value) return
+  future.value.push(cloneNode(config.value))
+  restoring.value = true
+  config.value = previous
+  restoring.value = false
+  changed()
+}
+
+function redo() {
+  const next = future.value.pop()
+  if (!next || !config.value) return
+  history.value.push(cloneNode(config.value))
+  restoring.value = true
+  config.value = next
+  restoring.value = false
+  changed()
+}
+
+async function loadSite(siteKey: string) {
+  loading.value = true
+  try {
+    selectedSiteKey.value = siteKey
+    versions.value = await listPortalVersions(siteKey)
+    const candidate =
+      versions.value.find((item) => item.status === 'draft') ||
+      versions.value.find((item) => item.status === 'published') ||
+      versions.value[0]
+    if (!candidate) throw new Error('站点尚无配置版本')
+    let loaded = await getPortalVersion(siteKey, candidate.versionId)
+    if (!loaded.config) throw new Error('配置版本缺少内容')
+    if (isPortalSiteConfigV2(loaded.config)) {
+      const migrated = migratePortalConfigV2ToV3(loaded.config)
+      if (canEdit.value) {
+        loaded = await createPortalDraft(
+          siteKey,
+          migrated,
+          `从 V2 版本 ${candidate.versionNo} 自动生成 V3 草稿`,
+        )
+        versions.value = await listPortalVersions(siteKey)
+        ElMessage.success('已保留线上 V2，并创建可编辑的 V3 草稿')
+      } else {
+        loaded = { ...loaded, config: migrated }
+      }
+    }
+    if (!loaded.config || !isPortalSiteConfigV3(loaded.config))
+      throw new Error('当前配置不是可编辑的 V3 布局')
+    activeVersion.value = loaded
+    config.value = normalizeEditableConfig(cloneNode(loaded.config))
+    activePageSlug.value = config.value.pages.home ? 'home' : Object.keys(config.value.pages)[0]
+    selectedNodeId.value = config.value.pages[activePageSlug.value]?.root.id || ''
+    history.value = []
+    future.value = []
+    dirty.value = false
+    restoreLocalSnapshot()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '站点配置加载失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function load() {
+  loading.value = true
+  try {
+    ;[sites.value, codePackages.value] = await Promise.all([
+      listPortalSites(),
+      auth.hasAnyPermission(['portal-code:read']) ? listPortalCodePackages() : Promise.resolve([]),
+    ])
+    if (!sites.value.length) throw new Error('当前系统没有门户站点')
+    await loadSite(selectedSiteKey.value || sites.value[0].siteKey)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '门户设计中心加载失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function refreshCodePackages() {
+  codePackages.value = await listPortalCodePackages()
+}
+
+function selectPage(slug: string) {
+  activePageSlug.value = slug
+  selectedNodeId.value = activePage.value?.root.id || ''
+  leftMode.value = 'layers'
+}
+
+function dragPalette(event: DragEvent, kind: 'layout' | 'component', value: string) {
+  event.dataTransfer?.setData('application/x-kma-node', JSON.stringify({ kind, value }))
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy'
+}
+
+function makeNode(kind: 'layout' | 'component', value: string): LayoutNode | undefined {
+  const root = activePage.value?.root
+  if (!root) return undefined
+  const id = uniqueNodeId(root, value)
+  if (kind === 'component') {
+    return {
+      id,
+      type: 'component',
+      component: value as LayoutNode & never,
+      name: cmsBlockDefinitions.find((item) => item.type === value)?.title || value,
+      layout: { span: { desktop: 12, tablet: 8, mobile: 4 } },
+      props: {},
+    } as LayoutNode
+  }
+  return {
+    id,
+    type: value as 'section' | 'container' | 'grid' | 'stack',
+    name: value === 'grid' ? '响应式网格' : value === 'stack' ? '堆叠容器' : '内容容器',
+    columns: value === 'grid' ? { desktop: 12, tablet: 8, mobile: 4 } : undefined,
+    layout: { gap: { desktop: 16, tablet: 12, mobile: 12 } },
+    children: [],
+  } as LayoutNode
+}
+
+function handleDrop(parentId: string, raw: string) {
+  if (!activePage.value || !canEdit.value) return
+  try {
+    const payload = JSON.parse(raw) as {
+      kind: 'layout' | 'component' | 'move'
+      value?: string
+      nodeId?: string
+    }
+    mutate(() => {
+      if (payload.kind === 'move' && payload.nodeId) {
+        const source = findNode(activePage.value!.root, payload.nodeId)
+        const oldParent = findParent(activePage.value!.root, payload.nodeId)
+        const target = findNode(activePage.value!.root, parentId)
+        if (
+          !source ||
+          source.locked ||
+          !oldParent ||
+          !('children' in oldParent) ||
+          !target ||
+          !('children' in target)
+        )
+          return
+        let ancestor: LayoutNode | undefined = target
+        while (ancestor) {
+          if (ancestor.id === source.id) return
+          const next = findParent(activePage.value!.root, ancestor.id)
+          if (!next) break
+          ancestor = next
+        }
+        oldParent.children = oldParent.children.filter((child) => child.id !== source.id)
+        target.children.push(source)
+        selectedNodeId.value = source.id
+        return
+      }
+      if (!payload.value || (payload.kind !== 'layout' && payload.kind !== 'component')) return
+      const node = makeNode(payload.kind, payload.value)
+      if (node && insertNode(activePage.value!.root, parentId, node)) selectedNodeId.value = node.id
+    })
+  } catch {
+    ElMessage.warning('无法识别拖拽内容')
+  }
+}
+
+function handleReorder(parentId: string, nextChildren: LayoutNode[]) {
+  if (!activePage.value || !canEdit.value) return
+  const parent = findNode(activePage.value.root, parentId)
+  if (!parent || !('children' in parent)) return
+  checkpoint()
+  parent.children = nextChildren
+  changed()
+}
+
+function addToSelected(kind: 'layout' | 'component', value: string) {
+  const parent =
+    selectedNode.value && 'children' in selectedNode.value ? selectedNode.value : activePage.value?.root
+  if (!parent) return
+  mutate(() => {
+    const node = makeNode(kind, value)
+    if (node && insertNode(activePage.value!.root, parent.id, node)) selectedNodeId.value = node.id
+  })
+}
+
+function addSandbox(item: PortalCodePackage) {
+  if (!item.currentVersion || !activePage.value || !config.value) {
+    ElMessage.warning('代码组件必须先通过扫描并发布版本')
+    return
+  }
+  const parent =
+    selectedNode.value && 'children' in selectedNode.value ? selectedNode.value : activePage.value.root
+  mutate(() => {
+    const node: LayoutNode = {
+      id: uniqueNodeId(activePage.value!.root, item.packageKey),
+      type: 'sandbox',
+      name: item.displayName,
+      packageId: item.packageKey,
+      version: item.currentVersion!,
+      height: 360,
+      capabilities: ['page-context'],
+      config: {},
+      layout: {
+        span: { desktop: 12, tablet: 8, mobile: 4 },
+        hidden: { desktop: false, tablet: false, mobile: false },
+      },
+    }
+    if (!insertNode(activePage.value!.root, parent.id, node)) return
+    selectedNodeId.value = node.id
+    if (
+      !config.value!.packages.some(
+        (reference) => reference.packageId === item.packageKey && reference.version === item.currentVersion,
+      )
+    )
+      config.value!.packages.push({
+        packageId: item.packageKey,
+        version: item.currentVersion!,
+        source: 'site',
+      })
+  })
+}
+
+function removeSelected() {
+  if (!activePage.value || !selectedNode.value) return
+  mutate(() => {
+    const parent = findParent(activePage.value!.root, selectedNode.value!.id)
+    if (!removeNode(activePage.value!, selectedNode.value!.id)) {
+      ElMessage.warning('根节点、锁定节点和系统必需组件不能删除')
+      return
+    }
+    selectedNodeId.value = parent?.id || activePage.value!.root.id
+  })
+}
+
+function duplicateSelected() {
+  if (!activePage.value || !selectedNode.value) return
+  mutate(() => {
+    const copy = duplicateNode(activePage.value!.root, selectedNode.value!.id)
+    if (copy) selectedNodeId.value = copy.id
+    else ElMessage.warning('锁定节点或已满容器不能复制')
+  })
+}
+
+function moveSelected(direction: -1 | 1) {
+  if (!activePage.value || !selectedNode.value) return
+  mutate(() => {
+    if (!moveNode(activePage.value!.root, selectedNode.value!.id, direction))
+      ElMessage.warning('当前节点无法继续移动')
+  })
+}
+
+async function createSymbol() {
+  if (!config.value || !selectedNode.value || !('children' in selectedNode.value)) {
+    ElMessage.warning('请选择一个容器节点')
+    return
+  }
+  let name = ''
+  try {
+    const result = await ElMessageBox.prompt('输入可复用区块名称', '保存可复用区块', {
+      inputPattern: /^.{1,80}$/,
+      inputErrorMessage: '名称为 1–80 个字符',
+    })
+    name = result.value
+  } catch {
+    return
+  }
+  if (!name.trim()) return
+  const symbolId = `symbol-${Date.now().toString(36)}`.slice(0, 64)
+  mutate(() => {
+    config.value!.symbols[symbolId] = {
+      id: symbolId,
+      name: name.trim().slice(0, 80),
+      revision: 1,
+      root: cloneNode(selectedNode.value!),
+    }
+  })
+}
+
+async function save() {
+  if (!config.value || !activeVersion.value || !canEdit.value) return
+  if (activeVersion.value.status !== 'draft') {
+    activeVersion.value = await createPortalDraft(selectedSiteKey.value, config.value, '低代码设计器新草稿')
+  } else {
+    saving.value = true
+    try {
+      activeVersion.value = await updatePortalDraft(
+        selectedSiteKey.value,
+        activeVersion.value,
+        config.value,
+        '低代码布局编辑',
+      )
+    } finally {
+      saving.value = false
+    }
+  }
+  dirty.value = false
+  localStorage.removeItem(snapshotKey.value)
+  ElMessage.success('V3 草稿已保存')
+}
+
+async function validateDraft() {
+  await save()
+  if (!activeVersion.value) return
+  const result = (await portalVersionAction(
+    selectedSiteKey.value,
+    'validate',
+    activeVersion.value.versionId,
+  )) as { valid?: boolean; issues?: string[] }
+  issues.value = result.issues || []
+  if (result.valid) ElMessage.success('布局、权限和数据源校验通过')
+  else ElMessage.warning('存在配置问题')
+}
+
+async function submit() {
+  await validateDraft()
+  if (issues.value.length || !activeVersion.value) return
+  await portalVersionAction(
+    selectedSiteKey.value,
+    'submit',
+    activeVersion.value.versionId,
+    '低代码页面提交审核',
+  )
+  ElMessage.success('已提交审核')
+  await loadSite(selectedSiteKey.value)
+}
+
+async function publish() {
+  if (!activeVersion.value) return
+  await ElMessageBox.confirm('发布将原子切换门户，旧版本仍可回滚。确认继续？', '发布门户')
+  await portalVersionAction(selectedSiteKey.value, 'publish', activeVersion.value.versionId, '低代码门户发布')
+  ElMessage.success('门户已发布')
+  await loadSite(selectedSiteKey.value)
+}
+
+function saveLocalSnapshot() {
+  if (!config.value || !dirty.value) return
+  localStorage.setItem(
+    snapshotKey.value,
+    JSON.stringify({
+      versionId: activeVersion.value?.versionId,
+      lockVersion: activeVersion.value?.lockVersion,
+      savedAt: new Date().toISOString(),
+      config: config.value,
+    }),
+  )
+}
+
+function restoreLocalSnapshot() {
+  const raw = localStorage.getItem(snapshotKey.value)
+  if (!raw || !activeVersion.value) return
+  try {
+    const snapshot = JSON.parse(raw) as {
+      versionId?: number
+      lockVersion?: number
+      config?: PortalSiteConfigV3
+    }
+    if (
+      snapshot.versionId === activeVersion.value.versionId &&
+      snapshot.lockVersion === activeVersion.value.lockVersion &&
+      snapshot.config &&
+      isPortalSiteConfigV3(snapshot.config)
+    ) {
+      config.value = normalizeEditableConfig(snapshot.config)
+      dirty.value = true
+      ElMessage.info('已恢复本机未保存的 V3 编辑副本')
+    }
+  } catch {
+    localStorage.removeItem(snapshotKey.value)
+  }
+}
+
+watch(config, saveLocalSnapshot, { deep: true })
+watch(activePageSlug, () => {
+  selectedNodeId.value = activePage.value?.root.id || ''
+})
+
+onMounted(async () => {
+  await nextTick()
+  await load()
+})
+</script>
+
+<template>
+  <div class="low-code-designer" v-loading="loading">
+    <header class="low-code-toolbar">
+      <div class="low-code-toolbar__identity">
+        <el-select
+          v-model="selectedSiteKey"
+          aria-label="选择门户站点"
+          class="low-code-site-select"
+          @change="loadSite"
+        >
+          <el-option v-for="site in sites" :key="site.siteKey" :label="site.name" :value="site.siteKey" />
+        </el-select>
+        <div>
+          <strong>{{ activeSite?.name || '门户设计中心' }}</strong>
+          <span>
+            {{ selectedSiteKey }} · V{{ activeVersion?.versionNo || '-' }} ·
+            {{ activeVersion?.status || 'loading' }}
+          </span>
+        </div>
+        <el-tag v-if="dirty" type="warning" effect="plain">未保存</el-tag>
+      </div>
+
+      <div class="low-code-toolbar__breakpoints" aria-label="响应式断点">
+        <el-segmented
+          v-model="breakpoint"
+          :options="[
+            { label: '桌面 12 列', value: 'desktop' },
+            { label: '平板 8 列', value: 'tablet' },
+            { label: '手机 4 列', value: 'mobile' },
+          ]"
+        />
+      </div>
+
+      <div class="low-code-toolbar__actions">
+        <el-button :disabled="!history.length" @click="undo">撤销</el-button>
+        <el-button :disabled="!future.length" @click="redo">重做</el-button>
+        <el-button v-if="auth.hasAnyPermission(['portal-code:read'])" @click="codeDrawerOpen = true">
+          代码组件
+        </el-button>
+        <el-button :loading="saving" :disabled="!canEdit" type="primary" @click="save"> 保存草稿 </el-button>
+        <el-button :disabled="!canEdit" @click="validateDraft">校验</el-button>
+        <el-button :disabled="!canEdit" type="warning" @click="submit">提交审核</el-button>
+        <el-button
+          v-if="activeVersion?.status === 'reviewing'"
+          :disabled="!canPublish"
+          type="success"
+          @click="publish"
+        >
+          发布
+        </el-button>
+      </div>
+    </header>
+
+    <section class="low-code-workspace">
+      <aside class="low-code-left">
+        <el-segmented
+          v-model="leftMode"
+          :options="[
+            { label: '页面', value: 'pages' },
+            { label: '图层', value: 'layers' },
+            { label: '组件', value: 'components' },
+            { label: '复用', value: 'symbols' },
+          ]"
+        />
+
+        <div v-if="leftMode === 'pages'" class="low-code-panel-list">
+          <p class="low-code-panel-caption">全局壳层</p>
+          <button :class="{ 'is-active': activePageSlug === '$header' }" @click="selectPage('$header')">
+            <span>全局页头</span>
+            <small>shell</small>
+          </button>
+          <button :class="{ 'is-active': activePageSlug === '$footer' }" @click="selectPage('$footer')">
+            <span>全局页脚</span>
+            <small>shell</small>
+          </button>
+          <p class="low-code-panel-caption">站点页面</p>
+          <button
+            v-for="page in config?.pages"
+            :key="page.slug"
+            :class="{ 'is-active': activePageSlug === page.slug }"
+            @click="selectPage(page.slug)"
+          >
+            <span>{{ page.title || page.slug }}</span>
+            <small>{{ page.kind }}</small>
+          </button>
+        </div>
+
+        <div v-else-if="leftMode === 'layers'" class="low-code-layer-list">
+          <button
+            v-for="item in layerNodes"
+            :key="item.node.id"
+            :class="{ 'is-active': selectedNodeId === item.node.id }"
+            :style="{ paddingLeft: `${12 + (item.depth - 1) * 14}px` }"
+            @click="selectedNodeId = item.node.id"
+          >
+            <span>{{ item.node.name || item.node.id }}</span>
+            <small>{{ item.node.type }}</small>
+          </button>
+        </div>
+
+        <div v-else-if="leftMode === 'components'" class="low-code-palette">
+          <h3>布局</h3>
+          <div class="low-code-palette__grid">
+            <button
+              v-for="item in [
+                ['container', '容器'],
+                ['grid', '网格'],
+                ['stack', '堆叠'],
+                ['section', '区段'],
+              ]"
+              :key="item[0]"
+              draggable="true"
+              @dragstart="dragPalette($event, 'layout', item[0])"
+              @dblclick="addToSelected('layout', item[0])"
+            >
+              <strong>{{ item[1] }}</strong>
+              <small>{{ item[0] }}</small>
+            </button>
+          </div>
+          <h3>业务组件</h3>
+          <div class="low-code-palette__grid">
+            <button
+              v-for="item in cmsBlockDefinitions"
+              :key="item.type"
+              draggable="true"
+              @dragstart="dragPalette($event, 'component', item.type)"
+              @dblclick="addToSelected('component', item.type)"
+            >
+              <strong>{{ item.title }}</strong>
+              <small>{{ item.category }}</small>
+            </button>
+          </div>
+          <template v-if="codePackages.length">
+            <h3>站点沙箱组件</h3>
+            <div class="low-code-palette__grid">
+              <button
+                v-for="item in codePackages"
+                :key="item.packageId"
+                :disabled="!item.currentVersion"
+                @dblclick="addSandbox(item)"
+              >
+                <strong>{{ item.displayName }}</strong>
+                <small>{{ item.currentVersion || '待发布' }} · 双击添加</small>
+              </button>
+            </div>
+          </template>
+        </div>
+
+        <div v-else class="low-code-symbols">
+          <el-button class="low-code-full-button" :disabled="!canEdit" @click="createSymbol">
+            将所选容器存为复用区块
+          </el-button>
+          <button v-for="symbol in config?.symbols" :key="symbol.id">
+            <span>{{ symbol.name }}</span>
+            <small>修订 {{ symbol.revision }}</small>
+          </button>
+          <el-empty v-if="!Object.keys(config?.symbols || {}).length" description="暂无复用区块" />
+        </div>
+      </aside>
+
+      <main class="low-code-stage">
+        <div class="low-code-stage__meta">
+          <span>{{ activePage?.title }} · {{ nodeCount }} 个节点</span>
+          <span>{{ canvasWidth }}px · {{ zoom }}%</span>
+        </div>
+        <div class="low-code-stage__viewport">
+          <div
+            class="low-code-stage__canvas"
+            :class="`is-${breakpoint}`"
+            :style="{ width: `${canvasWidth}px`, transform: `scale(${zoom / 100})` }"
+          >
+            <DesignerCanvasNode
+              v-if="activePage"
+              :node="activePage.root"
+              :selected-id="selectedNodeId"
+              :breakpoint="breakpoint"
+              @select="selectedNodeId = $event"
+              @drop="handleDrop"
+              @reorder="handleReorder"
+            />
+          </div>
+        </div>
+      </main>
+
+      <aside class="low-code-inspector">
+        <header>
+          <div>
+            <strong>{{ selectedNode?.name || '未选择节点' }}</strong>
+            <span>{{ selectedNode?.id || '从画布或图层选择' }}</span>
+          </div>
+          <div v-if="selectedNode" class="low-code-inspector__node-actions">
+            <el-button text @click="moveSelected(-1)">上移</el-button>
+            <el-button text @click="moveSelected(1)">下移</el-button>
+            <el-button text @click="duplicateSelected">复制</el-button>
+            <el-button text type="danger" @click="removeSelected">删除</el-button>
+          </div>
+        </header>
+
+        <el-tabs v-model="inspectorMode" stretch>
+          <el-tab-pane label="布局" name="layout" />
+          <el-tab-pane label="内容" name="content" />
+          <el-tab-pane label="样式" name="style" />
+          <el-tab-pane label="数据" name="data" />
+          <el-tab-pane label="交互" name="interaction" />
+        </el-tabs>
+
+        <el-form v-if="selectedNode" label-position="top" class="low-code-inspector__form">
+          <template v-if="inspectorMode === 'layout'">
+            <el-form-item label="节点名称">
+              <el-input v-model="selectedNode.name" :disabled="!canEdit" @change="changed" />
+            </el-form-item>
+            <div class="low-code-field-grid">
+              <el-form-item label="桌面列宽">
+                <el-input-number
+                  v-model="selectedNode.layout!.span!.desktop"
+                  :min="1"
+                  :max="12"
+                  :disabled="!canEdit"
+                  @change="changed"
+                />
+              </el-form-item>
+              <el-form-item label="平板列宽">
+                <el-input-number
+                  v-model="selectedNode.layout!.span!.tablet"
+                  :min="1"
+                  :max="8"
+                  :disabled="!canEdit"
+                  @change="changed"
+                />
+              </el-form-item>
+              <el-form-item label="手机列宽">
+                <el-input-number
+                  v-model="selectedNode.layout!.span!.mobile"
+                  :min="1"
+                  :max="4"
+                  :disabled="!canEdit"
+                  @change="changed"
+                />
+              </el-form-item>
+            </div>
+            <el-form-item v-if="'children' in selectedNode" label="节点间距">
+              <el-slider
+                v-model="selectedNode.layout!.gap!.desktop"
+                :min="0"
+                :max="48"
+                :disabled="!canEdit"
+                @change="changed"
+              />
+            </el-form-item>
+            <el-form-item label="当前断点隐藏">
+              <el-switch
+                v-model="selectedNode.layout!.hidden![breakpoint]"
+                :disabled="!canEdit || selectedNode.locked"
+                @change="changed"
+              />
+            </el-form-item>
+          </template>
+
+          <template v-else-if="inspectorMode === 'content'">
+            <el-form-item label="组件类型">
+              <el-input
+                :model-value="selectedNode.type === 'component' ? selectedNode.component : selectedNode.type"
+                disabled
+              />
+            </el-form-item>
+            <el-form-item v-if="selectedNode.type === 'component'" label="标题文案">
+              <el-input v-model="selectedTitle" :disabled="!canEdit" @change="changed" />
+            </el-form-item>
+            <el-alert
+              title="属性由组件 Schema 约束；未知字段在发布校验时会被拒绝。"
+              type="info"
+              :closable="false"
+            />
+          </template>
+
+          <template v-else-if="inspectorMode === 'style'">
+            <el-form-item label="背景">
+              <el-input
+                v-model="selectedNode.style!.background"
+                placeholder="var(--kma-color-surface)"
+                :disabled="!canEdit"
+                @change="changed"
+              />
+            </el-form-item>
+            <el-form-item label="圆角">
+              <el-select v-model="selectedNode.style!.radius" :disabled="!canEdit" @change="changed">
+                <el-option label="无" value="0px" />
+                <el-option label="小" value="8px" />
+                <el-option label="标准" value="12px" />
+                <el-option label="大" value="20px" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="内边距">
+              <el-slider
+                v-model="selectedNode.style!.padding!.desktop"
+                :min="0"
+                :max="64"
+                :step="4"
+                :disabled="!canEdit"
+                @change="changed"
+              />
+            </el-form-item>
+          </template>
+
+          <template v-else-if="inspectorMode === 'data'">
+            <el-form-item v-if="selectedNode.type === 'component'" label="注册数据源">
+              <el-select
+                v-model="selectedNode.dataSource!.source"
+                clearable
+                :disabled="!canEdit"
+                @change="changed"
+              >
+                <el-option
+                  v-for="source in [
+                    'documents',
+                    'categories',
+                    'topics',
+                    'favorites',
+                    'history',
+                    'announcements',
+                    'static',
+                  ]"
+                  :key="source"
+                  :label="source"
+                  :value="source"
+                />
+              </el-select>
+            </el-form-item>
+            <el-alert
+              title="只能选择注册数据源；站点范围、RBAC 与空间 ACL 仍由后端裁决。"
+              type="success"
+              :closable="false"
+            />
+          </template>
+
+          <template v-else>
+            <el-form-item label="点击动作">
+              <el-select
+                v-if="selectedNode.type === 'component'"
+                v-model="selectedNode.actions![0].type"
+                clearable
+                :disabled="!canEdit"
+                @change="changed"
+              >
+                <el-option label="页面跳转" value="navigate" />
+                <el-option label="执行搜索" value="search" />
+                <el-option label="AI 提问" value="ask" />
+                <el-option label="打开内容" value="open-content" />
+                <el-option label="反馈" value="feedback" />
+                <el-option label="分析事件" value="analytics" />
+              </el-select>
+            </el-form-item>
+            <el-alert
+              title="交互使用受控动作，不执行 JavaScript、任意 API 或 SQL。"
+              type="warning"
+              :closable="false"
+            />
+          </template>
+        </el-form>
+        <el-empty v-else description="选择节点后编辑属性" />
+      </aside>
+    </section>
+
+    <footer class="low-code-statusbar">
+      <div class="low-code-statusbar__zoom">
+        <span>缩放</span>
+        <el-slider v-model="zoom" :min="40" :max="110" :show-tooltip="false" />
+      </div>
+      <span class="low-code-statusbar__path">{{ breadcrumbs.join(' / ') }}</span>
+      <button :class="{ 'has-issues': issues.length }" @click="issues = []">
+        {{ issues.length ? `${issues.length} 个校验问题` : '布局状态正常' }}
+      </button>
+    </footer>
+    <PortalCodeEditorDrawer v-model="codeDrawerOpen" @changed="refreshCodePackages" />
+  </div>
+</template>
+
+<style scoped>
+.low-code-designer {
+  --designer-border: #d9e5e1;
+  display: grid;
+  grid-template-rows: 58px minmax(0, 1fr) 34px;
+  height: calc(100vh - 40px);
+  min-height: 680px;
+  overflow: hidden;
+  color: #17342f;
+  background: #f3f6f4;
+  border: 1px solid var(--designer-border);
+  border-radius: 12px;
+}
+
+.low-code-toolbar {
+  z-index: 5;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto minmax(520px, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 8px 12px;
+  background: #fff;
+  border-bottom: 1px solid var(--designer-border);
+}
+
+.low-code-toolbar__identity,
+.low-code-toolbar__actions,
+.low-code-inspector__node-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.low-code-toolbar__identity > div {
+  display: grid;
+  min-width: 0;
+}
+
+.low-code-toolbar__identity span,
+.low-code-inspector header span,
+.low-code-stage__meta,
+.low-code-panel-list small,
+.low-code-layer-list small,
+.low-code-symbols small {
+  color: #71837f;
+  font-size: 11px;
+}
+
+.low-code-site-select {
+  width: 160px;
+}
+
+.low-code-toolbar__actions {
+  justify-content: flex-end;
+}
+
+.low-code-workspace {
+  display: grid;
+  grid-template-columns: 260px minmax(540px, 1fr) 320px;
+  min-height: 0;
+}
+
+.low-code-left,
+.low-code-inspector {
+  min-height: 0;
+  padding: 12px;
+  overflow: auto;
+  background: #fff;
+}
+
+.low-code-left {
+  border-right: 1px solid var(--designer-border);
+}
+
+.low-code-inspector {
+  border-left: 1px solid var(--designer-border);
+}
+
+.low-code-panel-list,
+.low-code-layer-list,
+.low-code-symbols {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.low-code-panel-caption {
+  margin: 8px 4px 2px;
+  color: #78908b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.low-code-panel-list button,
+.low-code-layer-list button,
+.low-code-symbols button {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.low-code-panel-list :where(button:hover),
+.low-code-layer-list :where(button:hover),
+.low-code-symbols :where(button:hover),
+.low-code-panel-list :where(button.is-active),
+.low-code-layer-list :where(button.is-active) {
+  background: #edf8f4;
+  border-color: #a6d5c8;
+}
+
+.low-code-palette h3 {
+  margin: 16px 0 8px;
+  font-size: 12px;
+}
+
+.low-code-palette__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.low-code-palette__grid button {
+  display: grid;
+  gap: 4px;
+  min-height: 58px;
+  padding: 9px;
+  color: inherit;
+  text-align: left;
+  background: #f8faf9;
+  border: 1px solid var(--designer-border);
+  border-radius: 8px;
+  cursor: grab;
+}
+
+.low-code-palette__grid :where(button:hover) {
+  border-color: #22a785;
+  box-shadow: 0 4px 12px rgb(0 68 56 / 0.08);
+}
+
+.low-code-palette__grid small {
+  color: #7b8d89;
+  font-size: 10px;
+}
+
+.low-code-stage {
+  display: grid;
+  grid-template-rows: 32px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  background-color: #e9efec;
+  background-image: radial-gradient(#cbd8d3 0.7px, transparent 0.7px);
+  background-size: 16px 16px;
+}
+
+.low-code-stage__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  background: rgb(255 255 255 / 0.88);
+  border-bottom: 1px solid var(--designer-border);
+}
+
+.low-code-stage__viewport {
+  padding: 28px;
+  overflow: auto;
+}
+
+.low-code-stage__canvas {
+  min-height: 720px;
+  margin: 0 auto;
+  padding: 24px;
+  overflow: hidden;
+  background: #fffdf8;
+  border: 1px solid #cbd8d3;
+  border-radius: 4px;
+  box-shadow: 0 10px 32px rgb(18 55 48 / 0.12);
+  transform-origin: top center;
+}
+
+.low-code-stage__canvas.is-tablet {
+  min-height: 768px;
+}
+
+.low-code-stage__canvas.is-mobile {
+  min-height: 844px;
+  padding: 16px;
+}
+
+.low-code-inspector header {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--designer-border);
+}
+
+.low-code-inspector header > div:first-child {
+  display: grid;
+}
+
+.low-code-inspector__node-actions {
+  flex-wrap: wrap;
+}
+
+.low-code-inspector__form {
+  padding-top: 8px;
+}
+
+.low-code-field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.low-code-field-grid :deep(.el-input-number) {
+  width: 100%;
+}
+
+.low-code-full-button {
+  width: 100%;
+}
+
+.low-code-statusbar {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  font-size: 11px;
+  background: #fff;
+  border-top: 1px solid var(--designer-border);
+}
+
+.low-code-statusbar__zoom {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.low-code-statusbar__path {
+  overflow: hidden;
+  color: #6c807b;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.low-code-statusbar button {
+  color: #27765f;
+  background: transparent;
+  border: 0;
+}
+
+.low-code-statusbar button.has-issues {
+  color: #a15b00;
+}
+
+:deep(.designer-node) {
+  grid-column: span var(--designer-span, 12);
+  min-width: 0;
+  padding: 8px;
+  background: rgb(255 255 255 / 0.6);
+  border: 1px dashed #b9cbc5;
+  border-radius: 8px;
+}
+
+:deep(.designer-node.is-selected) {
+  border-color: #008b70;
+  outline: 2px solid rgb(0 139 112 / 0.16);
+}
+
+:deep(.designer-node__label) {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: #4c645e;
+  font-size: 11px;
+}
+
+:deep(.designer-node__label small) {
+  color: #8b9a96;
+}
+
+:deep(.designer-node__children) {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 10px;
+  min-height: 48px;
+}
+
+.is-tablet :deep(.designer-node__children) {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+.is-mobile :deep(.designer-node__children) {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+:deep(.designer-node__empty),
+:deep(.designer-node__preview) {
+  display: grid;
+  grid-column: 1 / -1;
+  place-items: center;
+  min-height: 54px;
+  color: #7b8f89;
+  font-size: 12px;
+  background: #f3f7f5;
+  border-radius: 6px;
+}
+
+@media (width < 1440px) {
+  .low-code-toolbar {
+    grid-template-columns: minmax(220px, 1fr) auto;
+  }
+
+  .low-code-toolbar__breakpoints {
+    display: none;
+  }
+
+  .low-code-workspace {
+    grid-template-columns: 220px minmax(480px, 1fr) 300px;
+  }
+}
+
+@media (width < 1100px) {
+  .low-code-designer {
+    height: calc(100vh - 24px);
+  }
+
+  .low-code-workspace {
+    grid-template-columns: 190px minmax(480px, 1fr);
+  }
+
+  .low-code-inspector {
+    position: absolute;
+    z-index: 10;
+    top: 58px;
+    right: 0;
+    bottom: 34px;
+    width: 320px;
+    box-shadow: -8px 0 24px rgb(14 59 51 / 0.12);
+  }
+}
+</style>

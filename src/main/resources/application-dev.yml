@@ -1,0 +1,8 @@
+kma:
+  security:
+    mode: dev
+
+management:
+  endpoint:
+    health:
+      show-details: always

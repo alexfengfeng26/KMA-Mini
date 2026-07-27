@@ -1,0 +1,49 @@
+.portal-shell {
+  --portal-deep: var(--kma-color-primary-strong);
+  --portal-teal: var(--kma-color-primary);
+  --portal-mint: var(--kma-color-primary-soft);
+  --portal-cream: var(--kma-color-background);
+  --portal-paper: var(--kma-color-surface);
+  --portal-space-1: 4px;
+  --portal-space-2: 8px;
+  --portal-space-3: 12px;
+  --portal-space-4: 16px;
+  --portal-space-5: 20px;
+  --portal-space-6: 24px;
+  --portal-space-8: 32px;
+  --portal-space-9: 36px;
+  --portal-control-height: calc(36px * var(--kma-density-scale, 1));
+  --portal-radius-sm: var(--kma-radius-control);
+  --portal-radius-md: var(--kma-radius-card);
+  --el-component-size: var(--portal-control-height);
+  --el-font-size-base: 13px;
+  min-height: 100vh;
+  background: var(--portal-cream);
+  color: var(--ink);
+  font-size: 14px;
+}
+
+:root[data-kma-density='compact'] {
+  --kma-density-scale: 1;
+}
+
+:root[data-kma-density='comfortable'] {
+  --kma-density-scale: 1.12;
+}
+
+.portal-shell .el-button {
+  min-height: var(--portal-control-height);
+  padding: var(--portal-space-2) 14px;
+  font-size: 13px;
+}
+
+.portal-shell .el-input__wrapper,
+.portal-shell .el-select__wrapper {
+  min-height: var(--portal-control-height);
+  font-size: 13px;
+}
+
+.portal-shell :where(a, button, input, textarea):focus-visible {
+  outline: 2px solid var(--portal-teal);
+  outline-offset: 2px;
+}

@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kma.local/contracts/portal-site-config-v2.schema.json",
+  "title": "KMA Portal Site Configuration V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "revision",
+    "site",
+    "shell",
+    "theme",
+    "modules",
+    "contentScope",
+    "search",
+    "assistant",
+    "pages"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "revision": { "type": "string", "maxLength": 100 },
+    "site": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["siteKey", "scenario", "name", "locale"],
+      "properties": {
+        "siteKey": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{1,63}$" },
+        "scenario": { "enum": ["party", "internal-policy", "product-help"] },
+        "name": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "locale": { "type": "string", "minLength": 2, "maxLength": 16 }
+      }
+    },
+    "shell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["header", "navigation", "footer"],
+      "properties": {
+        "layout": { "enum": ["editorial-authority", "sidebar-workbench", "search-center"] },
+        "header": { "type": "object" },
+        "navigation": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label", "target"],
+            "properties": {
+              "id": { "$ref": "#/$defs/identifier" },
+              "label": { "type": "string", "minLength": 1, "maxLength": 32 },
+              "target": {
+                "type": "string",
+                "pattern": "^(home|library|ask|topics|favorites|profile|page/[a-z][a-z0-9-]{1,63})$"
+              }
+            }
+          }
+        },
+        "footer": { "type": "object" }
+      }
+    },
+    "theme": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preset", "mode", "density", "tokens"],
+      "properties": {
+        "pack": { "enum": ["party-authority", "policy-workbench", "help-product"] },
+        "preset": { "$ref": "#/$defs/identifier" },
+        "mode": { "enum": ["light", "dark", "system"] },
+        "density": { "enum": ["comfortable", "compact"] },
+        "tokens": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9]{1,60}$" },
+          "additionalProperties": { "type": "string", "maxLength": 160 }
+        },
+        "customCss": { "type": "string", "maxLength": 30720 },
+        "scopedCss": { "type": "string", "maxLength": 65535 }
+      }
+    },
+    "modules": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "portal.home": { "const": true },
+        "portal.library": { "type": "boolean" },
+        "portal.qa": { "type": "boolean" },
+        "portal.topics": { "type": "boolean" },
+        "portal.custom-pages": { "type": "boolean" },
+        "portal.favorites": { "type": "boolean" },
+        "portal.profile": { "const": true }
+      }
+    },
+    "contentScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allSpaces", "spaceCodes", "topicCodes", "contentTypes", "validityStatuses"],
+      "properties": {
+        "allSpaces": { "type": "boolean" },
+        "spaceCodes": { "$ref": "#/$defs/codeArray" },
+        "topicCodes": { "$ref": "#/$defs/codeArray" },
+        "contentTypes": { "$ref": "#/$defs/codeArray" },
+        "validityStatuses": { "$ref": "#/$defs/codeArray" }
+      }
+    },
+    "search": { "type": "object" },
+    "assistant": { "type": "object" },
+    "pages": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 50,
+      "additionalProperties": { "$ref": "#/$defs/page" }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+    },
+    "codeArray": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slug", "layout", "regions"],
+      "properties": {
+        "slug": { "$ref": "#/$defs/identifier" },
+        "layout": { "enum": ["single", "sidebar-left", "sidebar-right", "twelve-grid"] },
+        "extensions": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/extensionBinding" }
+        },
+        "regions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["main"],
+          "properties": {
+            "header": { "$ref": "#/$defs/blockArray" },
+            "main": { "$ref": "#/$defs/blockArray" },
+            "sidebar": { "$ref": "#/$defs/blockArray" },
+            "footer": { "$ref": "#/$defs/blockArray" }
+          }
+        }
+      }
+    },
+    "blockArray": {
+      "type": "array",
+      "maxItems": 100,
+      "items": { "$ref": "#/$defs/block" }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "enabled"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "type": {
+          "enum": [
+            "hero-search",
+            "category-grid",
+            "recent-documents",
+            "current-topic",
+            "reading-history",
+            "favorites",
+            "announcement",
+            "quick-ask",
+            "category-tree",
+            "category-cards",
+            "hot-searches",
+            "recommended-articles",
+            "pinned-content",
+            "faq-list",
+            "release-notes",
+            "validity-dashboard",
+            "document-timeline",
+            "related-documents",
+            "download-area",
+            "sop-steps",
+            "process-navigation",
+            "role-entry",
+            "learning-path",
+            "ai-assistant",
+            "suggested-questions",
+            "no-answer-help",
+            "human-help",
+            "rich-text",
+            "image-banner",
+            "metric-cards",
+            "feedback"
+          ]
+        },
+        "enabled": { "type": "boolean" },
+        "variant": { "type": "string", "maxLength": 32 },
+        "span": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "props": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              { "type": "string" },
+              { "type": "number" },
+              { "type": "boolean" }
+            ]
+          }
+        },
+        "dataSource": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source"],
+          "properties": {
+            "source": {
+              "enum": [
+                "documents",
+                "categories",
+                "topics",
+                "favorites",
+                "history",
+                "announcements",
+                "static",
+                "search",
+                "assistant"
+              ]
+            },
+            "filters": { "type": "object" }
+          }
+        }
+      }
+    },
+    "extensionBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extensionId", "version", "slotKey"],
+      "properties": {
+        "extensionId": { "$ref": "#/$defs/identifier" },
+        "version": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$" },
+        "slotKey": { "$ref": "#/$defs/identifier" },
+        "region": { "enum": ["header", "main", "sidebar", "footer"] },
+        "enabled": { "type": "boolean" },
+        "config": { "type": "object", "maxProperties": 30 }
+      }
+    }
+  }
+}
