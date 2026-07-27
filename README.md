@@ -172,27 +172,13 @@ mini 版只支持 `KMA_SECURITY_MODE=local`，使用 Argon2id 密码、短期 Ac
 
 ## 演示数据
 
-演示脚本只允许写入独立的 `kma_ui_test` 数据库，不会连接或清理正式业务库：
+为本机 `kma_mini` 的党建知识门户写入拟真业务演示数据：
 
 ```powershell
-$env:PGPASSWORD = "<本机 PostgreSQL 密码>"
-.\scripts\seed-demo-data.ps1
+.\scripts\seed-demo-portal-data.ps1
 ```
 
-脚本覆盖用户、角色、组织、模型 Profile、数据集、空间与 ACL、党建内容、专题、门户配置、收藏、阅读历史、任务、审计和 RAG 评测数据。演示账号密码由测试环境管理员创建或重置，仓库不保存固定密码。
-
-本机 `kma_mini` 开发库可执行幂等的默认演示数据种子：
-
-为默认知识空间补充“三会一课”AI 问答演示知识，可执行：
-
-```powershell
-$env:PGPASSWORD = "<本机 PostgreSQL 密码>"
-& "C:\Program Files\PostgreSQL\18\bin\psql.exe" `
-  -h localhost -U postgres -d kma_mini -v ON_ERROR_STOP=1 `
-  -f .\scripts\sql\seed-default-three-meetings.sql
-```
-
-脚本可重复执行，写入 5 篇已发布演示资料和 15 个可全文检索的 Chunk，并验证核心关键词召回。所有资料均明确标记为演示内容。
+脚本只接受 `kma_mini` 目标库，要求活跃的 `default` 知识空间且不存在非 `demo-portal` 文档；因此不会连接 `kma`，也不会覆盖真实业务数据。首次执行写入 25 篇拟真虚构党建内容、50 个全文检索 Chunk、5 个专题关联覆盖、管理员收藏和阅读历史；重复执行保持数据量不翻倍。所有文档均明确标识为演示数据，不作为正式制度依据，也不生成向量嵌入。
 
 ## API 调用示例
 
