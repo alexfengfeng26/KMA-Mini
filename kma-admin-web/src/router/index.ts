@@ -139,6 +139,20 @@ router.beforeEach(async (to) => {
     return loginRedirect(to)
   }
 
+  // A transient bootstrap failure can leave the browser parked on this route after
+  // the API has recovered. Retry once whenever the failure page is entered directly.
+  if (to.path === '/unavailable' && to.query.reason === 'site') {
+    const failedSite = routeSiteKey(to.query.site)
+    if (failedSite) {
+      try {
+        await portalSite.load(failedSite, 'home')
+        return portalHome(failedSite)
+      } catch {
+        // Keep rendering the failure page when the site is genuinely unavailable.
+      }
+    }
+  }
+
   if (to.path === '/') return portalHome('default')
   if (to.meta.legacyBusiness) {
     if (to.path === '/portal' || to.path.startsWith('/portal/')) {

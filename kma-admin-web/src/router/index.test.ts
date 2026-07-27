@@ -78,11 +78,18 @@ describe('router authorization guard', () => {
 
   it('isolates a site bootstrap failure on the unavailable page', async () => {
     sessionStorage.setItem('kma_access_token', 'token')
-    portalSite.load.mockRejectedValueOnce(new Error('site disabled'))
+    portalSite.load.mockRejectedValue(new Error('site disabled'))
     await router.push('/p/policy/home')
     expect(router.currentRoute.value.path).toBe('/unavailable')
     expect(router.currentRoute.value.query.site).toBe('policy')
     expect(router.currentRoute.value.query.reason).toBe('site')
+  })
+
+  it('recovers a site failure page after the bootstrap API becomes available', async () => {
+    sessionStorage.setItem('kma_access_token', 'token')
+    await router.push('/unavailable?site=default&reason=site')
+    expect(portalSite.load).toHaveBeenCalledWith('default', 'home')
+    expect(router.currentRoute.value.path).toBe('/p/default/home')
   })
 
   it('redirects a legacy portal route to the default site', async () => {

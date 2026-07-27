@@ -60,3 +60,71 @@ Spring Boot repackage could not replace the application JAR while Windows was ru
 Stop only the verified 8090 backend process before packaging, then restart it from the rebuilt JAR and repeat readiness, login, and database-connection checks.
 
 ---
+
+## [ERR-20260727-004] prettier_check_after_vue_edit
+
+**Logged**: 2026-07-27T15:05:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+新增站点失败页逻辑后，Vue 文件未先执行 Prettier，导致完整质量检查在首个格式门禁处停止。
+
+### Error
+```
+[warn] src/views/FeatureUnavailableView.vue
+[warn] Code style issues found in the above file. Run Prettier with --write to fix.
+```
+
+### Context
+- 执行 `npm run format:check`。
+- 修改文件为 `kma-admin-web/src/views/FeatureUnavailableView.vue`。
+
+### Suggested Fix
+编辑 Vue/TypeScript 文件后先对变更文件执行项目 Prettier，再启动完整质量流水线。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/views/FeatureUnavailableView.vue
+
+### Resolution
+- **Resolved**: 2026-07-27T15:06:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 使用仓库固定版本的 Prettier 格式化变更文件并重新执行全部检查。
+
+---
+
+## [ERR-20260727-005] github_tls_push
+
+**Logged**: 2026-07-27T15:12:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: infra
+
+### Summary
+本地提交成功后，首次 GitHub 推送在 TLS 握手阶段失败。
+
+### Error
+```
+fatal: unable to access 'https://github.com/alexfengfeng26/KMA-Mini.git/':
+OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection to github.com:443
+```
+
+### Context
+- 执行 `git push origin main`。
+- 本地提交 `6124898` 已成功创建，失败发生在连接 GitHub 期间。
+
+### Suggested Fix
+先用只读远端查询确认网络恢复，再重试相同分支推送；不要重建或改写已成功的本地提交。
+
+### Metadata
+- Reproducible: unknown
+- Related Files: .git/config
+
+### Resolution
+- **Resolved**: 2026-07-27T15:13:00+08:00
+- **Commit/PR**: pending
+- **Notes**: `git ls-remote` 随后成功，确认是瞬时 TLS 故障；保留原提交并重试推送。
+
+---

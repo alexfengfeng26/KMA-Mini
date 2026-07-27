@@ -18,6 +18,22 @@ const pages = [
   ['/console/profile', '个人与密码'],
 ] as const
 
+test('live backend: a stale site failure page recovers after bootstrap succeeds', async ({ page }) => {
+  test.skip(process.env.KMA_LIVE_UI !== 'true', '需要显式启用真实 KMA 后端联调')
+  const password = process.env.KMA_LIVE_PASSWORD
+  expect(password, 'KMA_LIVE_PASSWORD is required').toBeTruthy()
+
+  await page.goto('/login')
+  await page.getByLabel('用户名').fill('admin')
+  await page.getByLabel('密码').fill(password!)
+  await page.getByRole('button', { name: '登录知识中心' }).click()
+  await expect(page).toHaveURL(/\/p\/default\/home$/)
+
+  await page.goto('/unavailable?site=default&reason=site')
+  await expect(page).toHaveURL(/\/p\/default\/home$/)
+  await expect(page.locator('body')).not.toContainText('FEATURE DISABLED')
+})
+
 test('live backend: login, password rotation, core workflow and every management page', async ({ page }) => {
   test.setTimeout(90_000)
   test.skip(process.env.KMA_LIVE_UI !== 'true', '需要显式启用真实 KMA 后端联调')

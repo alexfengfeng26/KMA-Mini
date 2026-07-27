@@ -2,17 +2,28 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { getFrontendModule } from '../modules/registry'
+import { portalHome, routeSiteKey } from '../security/siteRoute'
 
 const route = useRoute()
+const siteFailure = computed(() => route.query.reason === 'site')
 const moduleTitle = computed(() => getFrontendModule(String(route.query.module || ''))?.title || '当前功能')
+const title = computed(() => (siteFailure.value ? '门户站点暂时不可用' : `${moduleTitle.value}未启用`))
+const description = computed(() =>
+  siteFailure.value
+    ? '站点配置加载失败。请检查服务状态后重试；服务恢复后会自动返回站点首页。'
+    : '当前前端模块配置已关闭此功能。如需使用，请联系门户管理员调整运行时配置。',
+)
+const retryPath = computed(() => portalHome(routeSiteKey(route.query.site) || 'default'))
 </script>
 
 <template>
   <main class="feature-unavailable">
-    <span>FEATURE DISABLED</span>
-    <h1>{{ moduleTitle }}未启用</h1>
-    <p>当前前端模块配置已关闭此功能。如需使用，请联系门户管理员调整运行时配置。</p>
-    <router-link to="/">返回可用首页</router-link>
+    <span>{{ siteFailure ? 'SITE UNAVAILABLE' : 'FEATURE DISABLED' }}</span>
+    <h1>{{ title }}</h1>
+    <p>{{ description }}</p>
+    <router-link :to="siteFailure ? retryPath : '/'">
+      {{ siteFailure ? '重新加载站点' : '返回可用首页' }}
+    </router-link>
   </main>
 </template>
 
