@@ -134,7 +134,7 @@ USING knowledge_doc d
 WHERE c.doc_id=d.doc_id AND d.source_tag='demo-portal';
 
 INSERT INTO knowledge_chunk(doc_id,space_id,chunk_index,content,char_offset,token_count,source_tag,search_text,meta)
-SELECT d.doc_id,d.space_id,part.chunk_index,part.content,part.char_offset,length(part.content),'demo-portal',part.content,
+SELECT d.doc_id,d.space_id,part.chunk_index,part.content,part.char_offset,length(part.content),'demo-portal',lexical.analyzed_search_text,
   jsonb_build_object('demo',true,'seedKey',seed.demo_key,'part',part.chunk_index)
 FROM knowledge_doc d
 JOIN demo_portal_document seed ON d.external_ref='demo:portal:' || seed.demo_key
@@ -142,7 +142,15 @@ CROSS JOIN LATERAL (
   VALUES
     (0, 0, seed.summary || ' 关键词：' || array_to_string(ARRAY(SELECT jsonb_array_elements_text(seed.keywords)), '、') || '。'),
     (1, length(seed.summary) + 1, seed.body || ' 本内容仅用于 KMA Mini 门户业务流程和检索演示。')
-) AS part(chunk_index,char_offset,content);
+) AS part(chunk_index,char_offset,content)
+CROSS JOIN LATERAL (
+  SELECT part.content || ' ' || COALESCE((
+    SELECT string_agg(substring(part.content FROM position FOR 2), ' ')
+    FROM generate_series(1, GREATEST(char_length(part.content) - 1, 0)) AS position
+    WHERE substring(part.content FROM position FOR 1) ~ '[一-龥]'
+      AND substring(part.content FROM position + 1 FOR 1) ~ '[一-龥]'
+  ), '') AS analyzed_search_text
+) AS lexical;
 
 DELETE FROM knowledge_favorite f
 USING knowledge_doc d
@@ -175,14 +183,24 @@ DECLARE
   topic_total integer;
   favorite_total integer;
   history_total integer;
+  thematic_hits integer;
 BEGIN
   SELECT count(*) INTO doc_total FROM knowledge_doc WHERE source_tag='demo-portal';
   SELECT count(*) INTO chunk_total FROM knowledge_chunk c JOIN knowledge_doc d ON d.doc_id=c.doc_id WHERE d.source_tag='demo-portal';
   SELECT count(DISTINCT t.topic_code) INTO topic_total FROM knowledge_doc_topic dt JOIN knowledge_doc d ON d.doc_id=dt.doc_id JOIN knowledge_topic t ON t.topic_id=dt.topic_id WHERE d.source_tag='demo-portal';
   SELECT count(*) INTO favorite_total FROM knowledge_favorite f JOIN knowledge_doc d ON d.doc_id=f.doc_id WHERE d.source_tag='demo-portal';
   SELECT count(*) INTO history_total FROM knowledge_read_history h JOIN knowledge_doc d ON d.doc_id=h.doc_id WHERE d.source_tag='demo-portal';
+  SELECT count(*) INTO thematic_hits
+  FROM knowledge_chunk c
+  JOIN knowledge_doc d ON d.doc_id=c.doc_id
+  WHERE d.source_tag='demo-portal'
+    AND d.workflow_status='published' AND d.online AND d.is_active
+    AND c.search_vector @@ to_tsquery('simple', '主题 | 题党 | 党日');
   IF doc_total <> 25 OR chunk_total <> 50 OR topic_total <> 5 OR favorite_total <> 3 OR history_total <> 4 THEN
     RAISE EXCEPTION 'DEMO_PORTAL_SEED_VERIFICATION_FAILED docs=% chunks=% topics=% favorites=% history=%',doc_total,chunk_total,topic_total,favorite_total,history_total;
+  END IF;
+  IF thematic_hits = 0 THEN
+    RAISE EXCEPTION 'DEMO_PORTAL_SEED_LEXICAL_VERIFICATION_FAILED';
   END IF;
 END $$;
 
