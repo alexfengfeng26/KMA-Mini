@@ -261,3 +261,69 @@ rg: src\main\java\com\kma\knowledge\controller\*.java:
 - **Notes**: 后续搜索统一使用目录加 `-g` 过滤器。
 
 ---
+
+## [ERR-20260727-010] rg_missing_test_directory
+
+**Logged**: 2026-07-27T15:39:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+从项目根目录搜索审核动作时附带了不存在的 `tests` 目录，导致 `rg` 返回退出码 1。
+
+### Error
+```
+rg: tests: 系统找不到指定的文件。 (os error 2)
+```
+
+### Context
+- 项目后端测试位于 `src/test`，前端测试位于 `kma-admin-web/tests`。
+- 其他搜索目标已正常返回审核权限和旧版设计器实现。
+
+### Suggested Fix
+搜索前使用 `rg --files` 确认测试目录，或明确传入 `src/test` 与 `kma-admin-web/tests`。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/test, kma-admin-web/tests
+
+### Resolution
+- **Resolved**: 2026-07-27T15:39:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 后续搜索改用实际存在的测试目录。
+
+---
+
+## [ERR-20260727-011] rg_optional_no_match
+
+**Logged**: 2026-07-27T15:41:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+组合诊断命令的最后一个可选 `rg` 在 V22 中没有匹配项，导致整条命令以退出码 1 结束。
+
+### Error
+```
+Process exited with code 1 because the optional V22 permission search had no matches.
+```
+
+### Context
+- 前面的设计器、认证权限和 E2E 文件读取均已成功。
+- V22 不重复写入 V19 已存在的门户权限字符串属于正常情况。
+
+### Suggested Fix
+可选残留/匹配审计应显式接受 `rg` 的退出码 1，或与必须成功的读取命令分开执行。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/main/resources/db/migration/V22__single_tenant_cleanup.sql
+
+### Resolution
+- **Resolved**: 2026-07-27T15:41:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已将“无匹配”解释为正常结果，后续不与必需查询串联。
+
+---

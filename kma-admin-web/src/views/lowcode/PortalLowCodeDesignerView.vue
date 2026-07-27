@@ -65,6 +65,7 @@ const canEdit = computed(
     auth.permissions.has('kma:admin') ||
     (auth.permissions.has('portal-page:edit') && auth.permissions.has('portal-site:update')),
 )
+const canReview = computed(() => auth.hasAnyPermission(['portal-site:review']))
 const canPublish = computed(() => auth.hasAnyPermission(['portal-site:publish']))
 const activeSite = computed(() => sites.value.find((site) => site.siteKey === selectedSiteKey.value))
 const activePage = computed<LowCodePage | undefined>(() => {
@@ -191,10 +192,10 @@ async function loadSite(siteKey: string) {
   try {
     selectedSiteKey.value = siteKey
     versions.value = await listPortalVersions(siteKey)
-    const candidate =
-      versions.value.find((item) => item.status === 'draft') ||
-      versions.value.find((item) => item.status === 'published') ||
-      versions.value[0]
+    // Versions are returned newest first. Keep following the same version through
+    // draft -> reviewing -> published instead of silently reopening the old
+    // published V2 and generating another V3 draft after every submission.
+    const candidate = versions.value[0]
     if (!candidate) throw new Error('站点尚无配置版本')
     let loaded = await getPortalVersion(siteKey, candidate.versionId)
     if (!loaded.config) throw new Error('配置版本缺少内容')
@@ -487,6 +488,32 @@ async function submit() {
   await loadSite(selectedSiteKey.value)
 }
 
+async function approve() {
+  if (!activeVersion.value) return
+  await ElMessageBox.confirm('确认当前门户配置审核通过？', '审核门户')
+  await portalVersionAction(
+    selectedSiteKey.value,
+    'approve',
+    activeVersion.value.versionId,
+    '低代码门户审核通过',
+  )
+  ElMessage.success('审核通过，可以发布')
+  await loadSite(selectedSiteKey.value)
+}
+
+async function reject() {
+  if (!activeVersion.value) return
+  await ElMessageBox.confirm('确认驳回当前门户配置并退回草稿？', '驳回门户')
+  await portalVersionAction(
+    selectedSiteKey.value,
+    'reject',
+    activeVersion.value.versionId,
+    '低代码门户审核驳回',
+  )
+  ElMessage.success('已驳回并退回草稿')
+  await loadSite(selectedSiteKey.value)
+}
+
 async function publish() {
   if (!activeVersion.value) return
   await ElMessageBox.confirm('发布将原子切换门户，旧版本仍可回滚。确认继续？', '发布门户')
@@ -584,9 +611,33 @@ onMounted(async () => {
         </el-button>
         <el-button :loading="saving" :disabled="!canEdit" type="primary" @click="save"> 保存草稿 </el-button>
         <el-button :disabled="!canEdit" @click="validateDraft">校验</el-button>
-        <el-button :disabled="!canEdit" type="warning" @click="submit">提交审核</el-button>
+        <el-button
+          v-if="activeVersion?.status === 'draft'"
+          :disabled="!canEdit"
+          type="warning"
+          @click="submit"
+        >
+          提交审核
+        </el-button>
+        <el-button
+          v-if="activeVersion?.status === 'reviewing' && !activeVersion.reviewedAt"
+          :disabled="!canReview"
+          type="success"
+          @click="approve"
+        >
+          审核通过
+        </el-button>
         <el-button
           v-if="activeVersion?.status === 'reviewing'"
+          :disabled="!canReview"
+          type="danger"
+          plain
+          @click="reject"
+        >
+          驳回
+        </el-button>
+        <el-button
+          v-if="activeVersion?.status === 'reviewing' && activeVersion.reviewedAt"
           :disabled="!canPublish"
           type="success"
           @click="publish"

@@ -45,7 +45,34 @@ const runtimeConfig = {
   },
 }
 
-async function mockExperience(page: Page) {
+interface MockPortalVersion {
+  versionId: number
+  versionNo: number
+  status: 'draft' | 'reviewing' | 'published'
+  schemaVersion: 3
+  checksum: string
+  lockVersion: number
+  reviewedAt?: string
+}
+
+async function mockExperience(page: Page, versionOverride: Partial<MockPortalVersion> = {}) {
+  const currentVersion: MockPortalVersion = {
+    versionId: 1,
+    versionNo: 1,
+    status: 'draft',
+    schemaVersion: 3,
+    checksum: 'e2e',
+    lockVersion: 0,
+    ...versionOverride,
+  }
+  const publishedFallback: MockPortalVersion = {
+    versionId: 1,
+    versionNo: 1,
+    status: 'published',
+    schemaVersion: 3,
+    checksum: 'published-e2e',
+    lockVersion: 0,
+  }
   await page.addInitScript(() => {
     sessionStorage.setItem('kma_access_token', 'frontend2-token')
     sessionStorage.setItem('kma_must_change_password', 'false')
@@ -123,28 +150,20 @@ async function mockExperience(page: Page) {
         json: {
           code: 200,
           data: [
-            {
-              versionId: 1,
-              versionNo: 1,
-              status: 'draft',
-              schemaVersion: 3,
-              checksum: 'e2e',
-              lockVersion: 0,
-            },
+            currentVersion,
+            ...(currentVersion.versionId === publishedFallback.versionId ? [] : [publishedFallback]),
           ],
         },
       })
-    if (path === '/api/v1/admin/portal-sites/default/versions/1')
+    if (path.startsWith('/api/v1/admin/portal-sites/default/versions/')) {
+      const requestedVersionId = Number(path.split('/').at(-1))
+      const requestedVersion =
+        requestedVersionId === currentVersion.versionId ? currentVersion : publishedFallback
       return route.fulfill({
         json: {
           code: 200,
           data: {
-            versionId: 1,
-            versionNo: 1,
-            status: 'draft',
-            schemaVersion: 3,
-            checksum: 'e2e',
-            lockVersion: 0,
+            ...requestedVersion,
             config: {
               schemaVersion: 3,
               revision: 'e2e-v3',
@@ -189,6 +208,7 @@ async function mockExperience(page: Page) {
           },
         },
       })
+    }
     return route.fulfill({ json: { code: 200, data: [] } })
   })
 }
@@ -226,4 +246,34 @@ test('门户设计中心加载站点 V3 草稿并提供响应式编辑器', asyn
   await expect(page.getByText('KMA Mini', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('桌面 12 列')).toBeVisible()
   await expect(page.getByRole('button', { name: '保存草稿' })).toBeEnabled()
+})
+
+test('门户设计中心跟随最新审核版本并显示完整审核发布动作', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 })
+  await mockExperience(page, {
+    versionId: 2,
+    versionNo: 2,
+    status: 'reviewing',
+  })
+  await page.goto('/console/portal-appearance')
+
+  await expect(page.getByText('default · V2 · reviewing')).toBeVisible()
+  await expect(page.getByRole('button', { name: '提交审核' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '审核通过' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '驳回' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '发布' })).toHaveCount(0)
+})
+
+test('门户设计中心仅在审核通过后开放发布动作', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 })
+  await mockExperience(page, {
+    versionId: 2,
+    versionNo: 2,
+    status: 'reviewing',
+    reviewedAt: '2026-07-27T15:45:00+08:00',
+  })
+  await page.goto('/console/portal-appearance')
+
+  await expect(page.getByRole('button', { name: '审核通过' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '发布' })).toBeEnabled()
 })
