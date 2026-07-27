@@ -31,6 +31,40 @@ Failed to instantiate [com.kma.common.security.KmaLocalAuthService]: No default 
 
 ---
 
+## [ERR-20260727-016] github_remote_sha_tls_transient
+
+**Logged**: 2026-07-27T16:18:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: tooling
+
+### Summary
+成功推送后使用 `git ls-remote` 二次查询远端 SHA 时，GitHub TLS 连接瞬时失败并触发命令超时。
+
+### Error
+```
+fatal: unable to access 'https://github.com/alexfengfeng26/KMA-Mini.git/':
+OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection to github.com:443
+```
+
+### Context
+- 前一步 `git push origin main` 已明确返回 `main -> main` 成功。
+- 本地 HEAD 为 `184a55edc93dec7ec7e73a18594afa04158b391c`。
+
+### Suggested Fix
+网络恢复后重试只读远端查询；不要因瞬时 TLS 错误重复改写提交历史。
+
+### Metadata
+- Reproducible: no
+- Related Files: none
+
+### Resolution
+- **Resolved**: 2026-07-27T16:18:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 使用本地远端跟踪分支核对已推送提交，随后重试推送记录文件。
+
+---
+
 ## [ERR-20260727-015] designer_page_switch_changes_left_mode
 
 **Logged**: 2026-07-27T16:12:00+08:00
