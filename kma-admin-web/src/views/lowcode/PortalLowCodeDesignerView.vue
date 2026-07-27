@@ -125,12 +125,24 @@ const layerNodes = computed(() => {
   if (activePage.value) walkNodes(activePage.value.root, (node, depth) => result.push({ node, depth }))
   return result
 })
+const livePagePath = computed(() => {
+  const siteKey = encodeURIComponent(selectedSiteKey.value)
+  const page = activePage.value
+  if (!siteKey || !page || page.slug.startsWith('$') || page.kind === 'content') return ''
+  if (['home', 'library', 'ask', 'topics', 'favorites', 'profile'].includes(page.kind))
+    return `/p/${siteKey}/${page.kind}`
+  return `/p/${siteKey}/page/${encodeURIComponent(page.slug)}`
+})
 
 function checkpoint() {
   if (!config.value || restoring.value) return
   history.value.push(cloneNode(config.value))
   if (history.value.length > 100) history.value.shift()
   future.value = []
+}
+
+function openLivePage() {
+  if (livePagePath.value) window.open(livePagePath.value, '_blank', 'noopener,noreferrer')
 }
 
 function normalizeEditableConfig(value: PortalSiteConfigV3) {
@@ -757,7 +769,12 @@ onMounted(async () => {
       <main class="low-code-stage">
         <div class="low-code-stage__meta">
           <span>{{ activePage?.title }} · {{ nodeCount }} 个节点</span>
-          <span>{{ canvasWidth }}px · {{ zoom }}%</span>
+          <div>
+            <el-button v-if="livePagePath" link type="primary" @click="openLivePage">
+              打开真实页面
+            </el-button>
+            <span>{{ canvasWidth }}px · {{ zoom }}%</span>
+          </div>
         </div>
         <div class="low-code-stage__viewport">
           <div
@@ -1141,6 +1158,18 @@ onMounted(async () => {
   border-bottom: 1px solid var(--designer-border);
 }
 
+.low-code-stage__meta > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.low-code-stage__meta :deep(.el-button) {
+  height: auto;
+  padding: 0;
+  font-size: 11px;
+}
+
 .low-code-stage__viewport {
   padding: 28px;
   overflow: auto;
@@ -1287,6 +1316,11 @@ onMounted(async () => {
   font-size: 12px;
   background: #f3f7f5;
   border-radius: 6px;
+}
+
+:deep(.designer-node__preview.has-component) {
+  display: block;
+  background: transparent;
 }
 
 @media (width < 1440px) {

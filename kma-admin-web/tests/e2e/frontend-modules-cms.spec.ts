@@ -201,6 +201,25 @@ async function mockExperience(page: Page, versionOverride: Partial<MockPortalVer
                   kind: 'home',
                   root: { id: 'home-root', type: 'section', children: [] },
                 },
+                library: {
+                  slug: 'library',
+                  title: '资料中心',
+                  kind: 'library',
+                  root: {
+                    id: 'library-root',
+                    type: 'section',
+                    name: '资料中心页面',
+                    children: [
+                      {
+                        id: 'library-core',
+                        type: 'component',
+                        name: '资料中心组件',
+                        component: 'content-results',
+                        locked: true,
+                      },
+                    ],
+                  },
+                },
               },
               symbols: {},
               packages: [],
@@ -246,6 +265,12 @@ test('门户设计中心加载站点 V3 草稿并提供响应式编辑器', asyn
   await expect(page.getByText('KMA Mini', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('桌面 12 列')).toBeVisible()
   await expect(page.getByRole('button', { name: '保存草稿' })).toBeEnabled()
+
+  await page.getByRole('button', { name: '资料中心 library', exact: true }).click()
+  await expect(page.getByText('资料检索结果')).toBeVisible()
+  await expect(page.getByText('content-results')).toBeVisible()
+  await expect(page.getByText('系统核心组件 · 真实数据在门户运行时加载')).toBeVisible()
+  await expect(page.getByRole('button', { name: '打开真实页面' })).toBeVisible()
 })
 
 test('门户设计中心跟随最新审核版本并显示完整审核发布动作', async ({ page }) => {

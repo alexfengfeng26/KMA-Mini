@@ -1,9 +1,53 @@
 <script setup lang="ts">
 import { useDragAndDrop } from '@formkit/drag-and-drop/vue'
 import { computed, watch } from 'vue'
-import type { LayoutNode, PortalBreakpoint } from '../../cms/siteConfig'
+import type { LayoutNode, PortalBreakpoint, PortalCoreComponent } from '../../cms/siteConfig'
 import { blockDefinition } from '../../cms/blockDefinitions'
 import { responsiveValue } from '../../cms/v3/contract'
+
+const coreComponentMeta: Record<PortalCoreComponent, { title: string; description: string; marker: string }> =
+  {
+    'content-results': {
+      title: '资料检索结果',
+      description: '运行时加载筛选条件、分页结果和已发布资料。',
+      marker: '检索',
+    },
+    'document-reader': {
+      title: '内容阅读器',
+      description: '运行时加载正文、附件、关联资料和阅读操作。',
+      marker: '阅读',
+    },
+    'ai-conversation': {
+      title: 'AI 问答会话',
+      description: '运行时加载对话记录、引用来源和问题输入区。',
+      marker: '问答',
+    },
+    'topic-directory': {
+      title: '专题目录',
+      description: '运行时加载专题列表、专题进度和关联内容。',
+      marker: '专题',
+    },
+    'favorite-list': {
+      title: '收藏与历史',
+      description: '运行时加载当前用户的收藏资料和阅读记录。',
+      marker: '收藏',
+    },
+    'profile-card': {
+      title: '个人资料',
+      description: '运行时加载当前用户资料、账号状态和安全设置。',
+      marker: '账号',
+    },
+    'portal-navigation': {
+      title: '门户导航',
+      description: '运行时加载当前站点的已启用页面和导航入口。',
+      marker: '导航',
+    },
+    'account-entry': {
+      title: '账号入口',
+      description: '运行时加载登录状态、个人中心和退出入口。',
+      marker: '账户',
+    },
+  }
 
 const props = defineProps<{
   node: LayoutNode
@@ -19,13 +63,24 @@ const emit = defineEmits<{
 
 const children = computed(() => ('children' in props.node ? props.node.children : []))
 const acceptsChildren = computed(() => 'children' in props.node)
+const componentMeta = computed(() => {
+  if (props.node.type !== 'component') return undefined
+  const core = coreComponentMeta[props.node.component as PortalCoreComponent]
+  if (core) return { ...core, core: true, component: props.node.component }
+  const definition = blockDefinition(props.node.component as Parameters<typeof blockDefinition>[0])
+  return {
+    title: definition?.title || props.node.name || props.node.component,
+    description: definition
+      ? `${definition.category}业务区块，门户运行时会加载真实内容。`
+      : '门户运行时加载此业务组件的真实内容。',
+    marker: definition?.category || '区块',
+    core: false,
+    component: props.node.component,
+  }
+})
 const label = computed(() => {
   if (props.node.name) return props.node.name
-  if (props.node.type === 'component')
-    return (
-      blockDefinition(props.node.component as Parameters<typeof blockDefinition>[0])?.title ||
-      props.node.component
-    )
+  if (props.node.type === 'component') return componentMeta.value?.title || props.node.component
   if (props.node.type === 'sandbox') return `沙箱 · ${props.node.packageId}`
   if (props.node.type === 'symbol-ref') return `复用 · ${props.node.symbolId}`
   return props.node.type
@@ -117,10 +172,96 @@ function forwardReorder(parentId: string, nextChildren: LayoutNode[]) {
       />
       <div v-if="children.length === 0" class="designer-node__empty">拖入组件或布局</div>
     </div>
-    <div v-else class="designer-node__preview">
+    <div v-else class="designer-node__preview" :class="{ 'has-component': node.type === 'component' }">
       <template v-if="node.type === 'sandbox'">独立来源 iframe · 受控 Portal SDK</template>
       <template v-else-if="node.type === 'symbol-ref'">共享区块实例</template>
-      <template v-else>实时业务组件预览区</template>
+      <div
+        v-else-if="node.type === 'component' && componentMeta"
+        class="designer-component-preview"
+        :class="{ 'is-core': componentMeta.core }"
+      >
+        <div class="designer-component-preview__marker">{{ componentMeta.marker }}</div>
+        <div class="designer-component-preview__content">
+          <div class="designer-component-preview__heading">
+            <strong>{{ componentMeta.title }}</strong>
+            <span>{{ componentMeta.component }}</span>
+          </div>
+          <p>{{ componentMeta.description }}</p>
+          <small v-if="componentMeta.core">系统核心组件 · 真实数据在门户运行时加载</small>
+          <small v-else>业务区块 · 真实数据在门户运行时加载</small>
+        </div>
+      </div>
     </div>
   </article>
 </template>
+
+<style scoped>
+.designer-component-preview {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+  min-height: 92px;
+  padding: 14px;
+  color: #435c56;
+  text-align: left;
+  background: linear-gradient(135deg, #f7faf9, #eef5f2);
+  border: 1px solid #d4e2dd;
+  border-radius: 8px;
+}
+
+.designer-component-preview.is-core {
+  background: linear-gradient(135deg, #f2faf7, #e5f3ee);
+  border-color: #a9d4c7;
+}
+
+.designer-component-preview__marker {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  color: #08735e;
+  font-size: 12px;
+  font-weight: 800;
+  background: #d7eee7;
+  border-radius: 12px;
+}
+
+.designer-component-preview__content {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.designer-component-preview__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.designer-component-preview__heading strong {
+  color: #173f36;
+  font-size: 14px;
+}
+
+.designer-component-preview__heading span {
+  color: #6f8580;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+}
+
+.designer-component-preview p {
+  margin: 0;
+  color: #526b65;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.designer-component-preview small {
+  color: #16816a;
+  font-size: 10px;
+  font-weight: 700;
+}
+</style>

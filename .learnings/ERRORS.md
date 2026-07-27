@@ -31,6 +31,74 @@ Failed to instantiate [com.kma.common.security.KmaLocalAuthService]: No default 
 
 ---
 
+## [ERR-20260727-015] designer_page_switch_changes_left_mode
+
+**Logged**: 2026-07-27T16:12:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+实机自动化连续点击两个门户页面时，第一次选页会自动将左侧面板切换为“图层”，导致第二个页面按钮不可见。
+
+### Error
+```
+No element matched selector
+waiting for getByRole('button', { name: 'AI 问答 ask' })
+```
+
+### Context
+- `selectPage` 的预期交互会在选中页面后进入图层模式。
+- 资料中心点击成功，失败发生在未切回页面列表就继续点击 AI 问答。
+
+### Suggested Fix
+验证多个页面时，每次选页后先点击可见的“页面”分段标签，再定位下一个页面按钮。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/views/lowcode/PortalLowCodeDesignerView.vue
+
+### Resolution
+- **Resolved**: 2026-07-27T16:12:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 实机验证流程改为逐页切回页面列表。
+
+---
+
+## [ERR-20260727-014] playwright_accessible_name_spacing
+
+**Logged**: 2026-07-27T16:07:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: tests
+
+### Summary
+CMS 定向浏览器测试错误地假设按钮无障碍名称中没有空格，导致元素定位超时。
+
+### Error
+```
+locator.click: Test timeout of 30000ms exceeded
+waiting for getByRole('button', { name: /资料中心library/ })
+```
+
+### Context
+- 实际无障碍树中的按钮名称为 `资料中心 library`。
+- 页面节点和按钮均已正常渲染，失败仅来自测试选择器。
+
+### Suggested Fix
+优先使用实际可访问名称的精确匹配，避免依赖浏览器文本节点的拼接细节。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/tests/e2e/frontend-modules-cms.spec.ts
+
+### Resolution
+- **Resolved**: 2026-07-27T16:07:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 定位器改为精确名称 `资料中心 library`。
+
+---
+
 ## [ERR-20260727-002] v22_clean_install_admin_role
 
 **Logged**: 2026-07-27T13:08:00+08:00
@@ -325,5 +393,73 @@ Process exited with code 1 because the optional V22 permission search had no mat
 - **Resolved**: 2026-07-27T15:41:00+08:00
 - **Commit/PR**: pending
 - **Notes**: 已将“无匹配”解释为正常结果，后续不与必需查询串联。
+
+---
+
+## [ERR-20260727-012] element_segmented_hidden_radio
+
+**Logged**: 2026-07-27T15:51:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+浏览器自动化按 radio 角色点击 Element Plus 分段控件时命中隐藏 input，等待可操作状态超时。
+
+### Error
+```
+Playwright selector deadline exceeded
+waiting on click for selector internal:role=radio[name="页面"s]
+```
+
+### Context
+- 真实门户设计中心需要从“图层”切换回“页面”。
+- DOM 中 radio 唯一但实际可点击目标是其可见 label。
+
+### Suggested Fix
+Element Plus segmented 控件使用可见标签或关联 label 点击，并在失败后重新获取 DOM 快照。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/views/lowcode/PortalLowCodeDesignerView.vue
+
+### Resolution
+- **Resolved**: 2026-07-27T15:51:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 改用快照中可见的分段标签继续验证。
+
+---
+
+## [ERR-20260727-013] portal_frame_wrong_path
+
+**Logged**: 2026-07-27T15:54:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+读取系统页面框架时误判其位于 `views/portal`，实际文件不在该路径。
+
+### Error
+```
+Cannot find path 'kma-admin-web/src/views/portal/PortalSystemPageFrame.vue'
+because it does not exist.
+```
+
+### Context
+- 同一诊断已成功证明资料中心含根节点和 `content-results` 核心组件。
+- 错误只影响补充源码读取。
+
+### Suggested Fix
+未知组件路径先使用 `rg --files | rg "PortalSystemPageFrame"` 定位，再读取精确文件。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src
+
+### Resolution
+- **Resolved**: 2026-07-27T15:54:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 后续使用文件索引定位系统页面框架。
 
 ---
