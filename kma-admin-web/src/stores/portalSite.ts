@@ -59,10 +59,10 @@ export const usePortalSiteStore = defineStore('portal-site', () => {
   }
 
   async function load(nextSiteKey: string, page = 'home') {
+    error.value = ''
     if (bootstrap.value && siteKey.value === nextSiteKey && bootstrap.value.page.slug === page)
       return bootstrap.value
     loading.value = true
-    error.value = ''
     try {
       const result = await getPortalBootstrap(nextSiteKey, page)
       siteKey.value = nextSiteKey

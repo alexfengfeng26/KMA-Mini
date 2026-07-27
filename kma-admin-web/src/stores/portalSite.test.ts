@@ -100,4 +100,19 @@ describe('portal site store', () => {
     expect(document.querySelector('style[data-kma-site-theme]')).toBeNull()
     expect(context.setActivePortalSiteKey).toHaveBeenLastCalledWith('default')
   })
+
+  it('clears a failed page error when returning to an already cached page', async () => {
+    const store = usePortalSiteStore()
+    await store.load('policy', 'home')
+
+    api.getPortalBootstrap.mockRejectedValueOnce(new Error('PORTAL_PAGE_NOT_FOUND'))
+    await expect(store.load('policy', 'missing')).rejects.toThrow('PORTAL_PAGE_NOT_FOUND')
+    expect(store.error).toBe('PORTAL_PAGE_NOT_FOUND')
+
+    await store.load('policy', 'home')
+
+    expect(store.error).toBe('')
+    expect(store.bootstrap?.page.slug).toBe('home')
+    expect(api.getPortalBootstrap).toHaveBeenCalledTimes(2)
+  })
 })

@@ -128,3 +128,136 @@ OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection to github.com:443
 - **Notes**: `git ls-remote` 随后成功，确认是瞬时 TLS 故障；保留原提交并重试推送。
 
 ---
+
+## [ERR-20260727-006] browser_networkidle_unsupported
+
+**Logged**: 2026-07-27T15:23:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+浏览器控制环境声明了 `networkidle`，但实际本地页面检查不支持该等待状态。
+
+### Error
+```
+playwright_wait_for_load_state does not support networkidle
+```
+
+### Context
+- 导航到 `http://localhost:27183/p/default/home` 后等待网络空闲。
+- 页面导航已完成，失败仅发生在后续等待调用。
+
+### Suggested Fix
+本环境检查 SPA 时使用 `domcontentloaded` 或直接等待明确的页面元素，不依赖 `networkidle`。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/tests/e2e
+
+### Resolution
+- **Resolved**: 2026-07-27T15:23:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 改用 DOM 快照和目标元素状态继续诊断。
+
+---
+
+## [ERR-20260727-007] browser_failed_cell_binding
+
+**Logged**: 2026-07-27T15:24:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+浏览器调用中途失败后，失败点之后声明的临时变量不可复用。
+
+### Error
+```
+homeSnapshot is not defined
+```
+
+### Context
+- 前一调用在等待状态处抛错。
+- 随后直接复用了未执行到声明位置的页面快照变量。
+
+### Suggested Fix
+浏览器调用异常后只复用确认已经初始化的绑定，其余结果变量重新使用 `var` 声明。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/tests/e2e
+
+### Resolution
+- **Resolved**: 2026-07-27T15:24:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 保留已成功绑定的标签页，重新声明快照与日志变量。
+
+---
+
+## [ERR-20260727-008] windows_tcp_process_lookup_timeout
+
+**Logged**: 2026-07-27T15:26:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: infra
+
+### Summary
+数据库活动连接查询成功后，Windows `Get-NetTCPConnection` 进程定位超过命令时限。
+
+### Error
+```
+command timed out after 20040 milliseconds
+```
+
+### Context
+- 同一命令先成功确认 5 个 Mini JDBC 连接全部位于 `kma_mini`。
+- 超时发生在随后枚举 8090 监听进程的步骤。
+
+### Suggested Fix
+Windows 本地端口快速诊断优先使用 `netstat -ano` 过滤目标端口，再按 PID 查询进程。
+
+### Metadata
+- Reproducible: unknown
+- Related Files: logs/backend-kma-mini.out.log
+
+### Resolution
+- **Resolved**: 2026-07-27T15:26:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 保留已取得的数据库证据，改用 `netstat` 进行后续进程定位。
+
+---
+
+## [ERR-20260727-009] powershell_rg_wildcard_path
+
+**Logged**: 2026-07-27T15:27:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+在 PowerShell 中把含 `*.java` 的路径直接传给 `rg`，Windows 将其作为非法路径处理。
+
+### Error
+```
+rg: src\main\java\com\kma\knowledge\controller\*.java:
+文件名、目录名或卷标语法不正确。 (os error 123)
+```
+
+### Context
+- 搜索控制器中的 bootstrap 映射。
+- 同一命令中的精确文件查询已经返回所需结果。
+
+### Suggested Fix
+使用目录参数配合 `-g "*.java"`，不要把 Windows 通配符写进 `rg` 路径参数。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/main/java/com/kma/knowledge/controller
+
+### Resolution
+- **Resolved**: 2026-07-27T15:27:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 后续搜索统一使用目录加 `-g` 过滤器。
+
+---
