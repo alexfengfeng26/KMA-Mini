@@ -155,6 +155,50 @@ async function mockExperience(page: Page, versionOverride: Partial<MockPortalVer
           ],
         },
       })
+    if (path === '/api/v1/admin/portal-sites/default/design-capability')
+      return route.fulfill({
+        json: {
+          code: 200,
+          data: {
+            available: true,
+            provider: 'deepseek',
+            model: 'deepseek-v4-flash',
+          },
+        },
+      })
+    if (path === '/api/v1/admin/portal-sites/default/design-proposals')
+      return route.fulfill({
+        json: {
+          code: 200,
+          data: {
+            scope: 'page',
+            pageSlug: 'home',
+            model: 'deepseek-v4-flash',
+            summary: '突出首页搜索并增加公告区',
+            warnings: [],
+            promptTokens: 120,
+            completionTokens: 80,
+            target: {
+              slug: 'home',
+              title: '首页',
+              kind: 'home',
+              root: {
+                id: 'home-root',
+                type: 'section',
+                children: [
+                  {
+                    id: 'ai-announcement',
+                    type: 'component',
+                    component: 'announcement',
+                    name: 'AI 公告区',
+                    props: { title: '最新通知' },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      })
     if (path.startsWith('/api/v1/admin/portal-sites/default/versions/')) {
       const requestedVersionId = Number(path.split('/').at(-1))
       const requestedVersion =
@@ -308,6 +352,65 @@ test('门户设计中心在中等宽度将属性栏改为抽屉并扩大画布',
     .getByTestId('designer-stage')
     .evaluate((element) => element.getBoundingClientRect().width)
   expect(stageWidthWithDrawer).toBe(stageWidth)
+})
+
+test('门户设计中心预览并可撤销 DeepSeek 页面提案', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 })
+  await mockExperience(page)
+  await page.goto('/console/portal-appearance')
+
+  await page.getByRole('button', { name: 'AI 设计' }).click()
+  await expect(page.getByText('deepseek-v4-flash 已就绪')).toBeVisible()
+  await page.getByText('当前页面', { exact: true }).click()
+  await page.getByLabel('描述你想要的效果').fill('突出首页搜索，并增加一个简洁的公告区。')
+  await page.getByRole('button', { name: '生成设计提案' }).click()
+  await expect(page.getByText('突出首页搜索并增加公告区')).toBeVisible()
+  await expect(page.getByText('+1')).toBeVisible()
+  await page.getByRole('button', { name: '应用到草稿' }).click()
+
+  await expect(page.getByText('AI 公告区')).toBeVisible()
+  await expect(page.getByText('未保存')).toBeVisible()
+  await page.getByRole('button', { name: '撤销' }).click()
+  await expect(page.getByText('AI 公告区')).toHaveCount(0)
+})
+
+test('门户属性编辑形成独立历史并保护高级字段', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 })
+  await mockExperience(page)
+  await page.goto('/console/portal-appearance')
+
+  await page.getByRole('treeitem', { name: '资料中心 library', exact: true }).click()
+  await expect(page.getByText('资料检索结果')).toBeVisible()
+  await page.getByRole('treeitem', { name: '资料中心页面 section', exact: true }).click()
+  await page.getByRole('treeitem', { name: '资料中心组件 component 锁定' }).click()
+  await page.getByRole('tab', { name: '内容' }).click()
+  const title = page.getByLabel('标题', { exact: true })
+  await title.fill('权威资料入口')
+  await title.press('Tab')
+  await expect(page.getByRole('button', { name: '撤销' })).toBeEnabled()
+  await page.getByRole('button', { name: '撤销' }).click()
+  await expect(title).toHaveValue('')
+
+  await page.getByRole('tab', { name: '高级' }).click()
+  await page.getByLabel('高级属性 JSON').fill('{"id":"hacked"}')
+  await page.getByRole('button', { name: '应用高级属性' }).click()
+  await expect(page.getByText('不允许修改字段：id')).toBeVisible()
+})
+
+test('门户组件可从组件库拖入精确画布容器并撤销', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 })
+  await mockExperience(page)
+  await page.goto('/console/portal-appearance')
+
+  await page.getByText('组件', { exact: true }).click()
+  const announcement = page.locator('.low-code-palette button').filter({ hasText: '公告栏' })
+  await expect(announcement).toHaveCount(1)
+  await announcement.dragTo(page.locator('[data-node-id="home-root"]'))
+  const canvasComponents = page.getByTestId('canvas-viewport').locator('.designer-node--component')
+  await expect(canvasComponents).toHaveCount(1)
+  await expect(page.getByText('未保存')).toBeVisible()
+  await page.getByRole('button', { name: '撤销' }).click()
+  await expect(canvasComponents).toHaveCount(0)
 })
 
 test('门户设计中心窄宽度使用双抽屉并支持沉浸模式', async ({ page }) => {

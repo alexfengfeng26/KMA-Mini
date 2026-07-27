@@ -1003,6 +1003,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/portal-sites/{siteKey}/design-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["designProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/portal-sites/{siteKey}/approve": {
         parameters: {
             query?: never;
@@ -1907,6 +1923,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/portal-sites/{siteKey}/design-capability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["designCapability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/portal-sites/{siteKey}/analytics": {
         parameters: {
             query?: never;
@@ -2713,6 +2745,40 @@ export interface components {
             versionId: number;
             note?: string;
         };
+        PortalDesignProposalRequest: {
+            /** Format: int64 */
+            versionId: number;
+            /** Format: int32 */
+            expectedLockVersion: number;
+            config: components["schemas"]["JsonNode"];
+            scope: string;
+            pageSlug: string;
+            nodeId?: string;
+            instruction: string;
+        };
+        /** @description 统一响应结果 */
+        ApiResultPortalDesignProposalResponse: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["PortalDesignProposalResponse"];
+            /** Format: int64 */
+            timestamp?: number;
+            traceId?: string;
+        };
+        PortalDesignProposalResponse: {
+            scope?: string;
+            pageSlug?: string;
+            nodeId?: string;
+            model?: string;
+            summary?: string;
+            warnings?: string[];
+            target?: components["schemas"]["JsonNode"];
+            /** Format: int32 */
+            promptTokens?: number;
+            /** Format: int32 */
+            completionTokens?: number;
+        };
         PortalCodeFilesRequest: {
             version: string;
             manifest?: components["schemas"]["JsonNode"];
@@ -3073,8 +3139,24 @@ export interface components {
             enabled?: boolean;
             accountNonLocked?: boolean;
             authorities?: components["schemas"]["GrantedAuthority"][];
-            credentialsNonExpired?: boolean;
             accountNonExpired?: boolean;
+            credentialsNonExpired?: boolean;
+        };
+        /** @description 统一响应结果 */
+        ApiResultPortalDesignCapabilityResponse: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["PortalDesignCapabilityResponse"];
+            /** Format: int64 */
+            timestamp?: number;
+            traceId?: string;
+        };
+        PortalDesignCapabilityResponse: {
+            available?: boolean;
+            provider?: string;
+            model?: string;
+            reason?: string;
         };
         /** @description 统一响应结果 */
         ApiResultListPermissionNode: {
@@ -5154,6 +5236,32 @@ export interface operations {
             };
         };
     };
+    designProposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                siteKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalDesignProposalRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultPortalDesignProposalResponse"];
+                };
+            };
+        };
+    };
     approve: {
         parameters: {
             query?: never;
@@ -6575,6 +6683,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
+    designCapability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                siteKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultPortalDesignCapabilityResponse"];
                 };
             };
         };

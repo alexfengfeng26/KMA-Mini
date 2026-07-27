@@ -44,6 +44,9 @@ public class KnowledgeProperties {
      */
     private LlmProperties llm = new LlmProperties();
 
+    /** Dedicated model configuration for portal layout design. */
+    private PortalDesignProperties portalDesign = new PortalDesignProperties();
+
     /**
      * 重排序模型配置
      */
@@ -170,6 +173,16 @@ public class KnowledgeProperties {
         private String model = "qwen2.5";
         private String apiKey = "ollama";
         private int maxRetry = 3;
+    }
+
+    @Data
+    public static class PortalDesignProperties {
+        private boolean enabled = true;
+        private String baseUrl = "https://api.deepseek.com";
+        private String model = "deepseek-v4-flash";
+        private String apiKey;
+        private int timeoutSeconds = 90;
+        private int maxOutputTokens = 16_384;
     }
 
     @Data

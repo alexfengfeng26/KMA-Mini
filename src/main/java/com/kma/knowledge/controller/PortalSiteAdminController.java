@@ -2,10 +2,14 @@ package com.kma.knowledge.controller;
 
 import com.kma.common.result.ApiResult;
 import com.kma.knowledge.dto.PortalConfigDraftRequest;
+import com.kma.knowledge.dto.PortalDesignCapabilityResponse;
+import com.kma.knowledge.dto.PortalDesignProposalRequest;
+import com.kma.knowledge.dto.PortalDesignProposalResponse;
 import com.kma.knowledge.dto.PortalSiteCreateRequest;
 import com.kma.knowledge.dto.PortalSiteUpdateRequest;
 import com.kma.knowledge.dto.PortalVersionActionRequest;
 import com.kma.knowledge.service.PortalSiteService;
+import com.kma.knowledge.service.PortalDesignService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -28,6 +32,7 @@ import java.util.Map;
 @ConditionalOnProperty(prefix = "knowledge", name = "enabled", havingValue = "true", matchIfMissing = false)
 public class PortalSiteAdminController {
     private final PortalSiteService service;
+    private final PortalDesignService designService;
 
     @GetMapping
     @PreAuthorize("@ss.hasPermi('portal-site:read')")
@@ -72,6 +77,22 @@ public class PortalSiteAdminController {
     public ApiResult<Map<String, Object>> version(@PathVariable String siteKey,
                                                   @PathVariable Long versionId) {
         return ApiResult.success(service.version(siteKey, versionId));
+    }
+
+    @GetMapping("/{siteKey}/design-capability")
+    @PreAuthorize("@ss.hasPermi('portal-site:update') and @ss.hasPermi('portal-page:edit')")
+    public ApiResult<PortalDesignCapabilityResponse> designCapability(@PathVariable String siteKey) {
+        service.getSite(siteKey);
+        return ApiResult.success(designService.capability());
+    }
+
+    @PostMapping("/{siteKey}/design-proposals")
+    @PreAuthorize("@ss.hasPermi('portal-site:update') and @ss.hasPermi('portal-page:edit')")
+    public ApiResult<PortalDesignProposalResponse> designProposal(
+        @PathVariable String siteKey,
+        @Valid @RequestBody PortalDesignProposalRequest request
+    ) {
+        return ApiResult.success(designService.propose(siteKey, request));
     }
 
     @PostMapping("/{siteKey}/drafts")

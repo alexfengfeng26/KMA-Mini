@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { FullScreen, MoreFilled, Operation, Setting } from '@element-plus/icons-vue'
+import { FullScreen, MagicStick, MoreFilled, Operation, Setting } from '@element-plus/icons-vue'
 import {
   createPortalDraft,
   getPortalVersion,
@@ -11,7 +11,7 @@ import {
   portalVersionAction,
   updatePortalDraft,
 } from '../../api/portalSites'
-import type { PortalCodePackage } from '../../api/portalSites'
+import type { PortalCodePackage, PortalDesignProposal } from '../../api/portalSites'
 import type {
   LayoutNode,
   LowCodePage,
@@ -26,11 +26,16 @@ import { findNode, findParent, walkNodes } from '../../cms/v3/contract'
 import {
   cloneNode,
   duplicateNode,
+  insertNodeAt,
   insertNode,
   moveNode,
+  moveNodeAt,
   removeNode,
+  replaceNode,
   uniqueNodeId,
+  type DesignerDropPosition,
 } from '../../cms/v3/designerTree'
+import { componentPropertyFields } from '../../cms/v3/componentPropertySchema'
 import { migratePortalConfigV2ToV3 } from '../../cms/v3/migrateV2'
 import {
   buildDesignerStructure,
@@ -40,10 +45,11 @@ import {
 } from '../../cms/v3/designerWorkspace'
 import { useAuthStore } from '../../stores/auth'
 import DesignerCanvasNode from './DesignerCanvasNode.vue'
+import PortalAiDesignDrawer from './PortalAiDesignDrawer.vue'
 import PortalCodeEditorDrawer from './PortalCodeEditorDrawer.vue'
 
 type LeftMode = 'structure' | 'components' | 'symbols'
-type InspectorMode = 'layout' | 'content' | 'style' | 'data' | 'interaction'
+type InspectorMode = 'layout' | 'content' | 'style' | 'data' | 'interaction' | 'advanced'
 type ZoomMode = 'fit' | 'manual'
 type MoreCommand = 'undo' | 'redo' | 'code' | 'validate'
 
@@ -76,7 +82,10 @@ const history = ref<PortalSiteConfigV3[]>([])
 const future = ref<PortalSiteConfigV3[]>([])
 const restoring = ref(false)
 const codeDrawerOpen = ref(false)
+const aiDrawerOpen = ref(false)
 const codePackages = ref<PortalCodePackage[]>([])
+const advancedJson = ref('')
+let propertyBaseline: PortalSiteConfigV3 | undefined
 const designerRoot = ref<HTMLElement>()
 const stageViewport = ref<HTMLElement>()
 const canvasElement = ref<HTMLElement>()
@@ -123,17 +132,9 @@ const selectedNode = computed(() =>
     ? findNode(activePage.value.root, selectedNodeId.value)
     : undefined,
 )
-const selectedTitle = computed({
-  get: () =>
-    selectedNode.value?.type === 'component' && typeof selectedNode.value.props?.title === 'string'
-      ? selectedNode.value.props.title
-      : '',
-  set: (value: string) => {
-    if (selectedNode.value?.type !== 'component') return
-    selectedNode.value.props ||= {}
-    selectedNode.value.props.title = value
-  },
-})
+const selectedComponentFields = computed(() =>
+  selectedNode.value?.type === 'component' ? componentPropertyFields(selectedNode.value.component) : [],
+)
 const nodeCount = computed(() => {
   let count = 0
   if (activePage.value) walkNodes(activePage.value.root, () => (count += 1))
@@ -341,6 +342,24 @@ function changed() {
   issues.value = []
 }
 
+function beginPropertyEdit() {
+  if (!propertyBaseline && config.value && canEdit.value) propertyBaseline = cloneNode(config.value)
+}
+
+function commitPropertyEdit() {
+  if (!config.value || !propertyBaseline) {
+    changed()
+    return
+  }
+  if (JSON.stringify(propertyBaseline) !== JSON.stringify(config.value)) {
+    history.value.push(propertyBaseline)
+    if (history.value.length > 100) history.value.shift()
+    future.value = []
+    changed()
+  }
+  propertyBaseline = undefined
+}
+
 function mutate(operation: () => void) {
   if (!config.value || !canEdit.value) return
   checkpoint()
@@ -462,7 +481,7 @@ function makeNode(kind: 'layout' | 'component', value: string): LayoutNode | und
   } as LayoutNode
 }
 
-function handleDrop(parentId: string, raw: string) {
+function handleDrop(targetId: string, position: DesignerDropPosition, raw: string) {
   if (!activePage.value || !canEdit.value) return
   try {
     const payload = JSON.parse(raw) as {
@@ -470,48 +489,72 @@ function handleDrop(parentId: string, raw: string) {
       value?: string
       nodeId?: string
     }
-    mutate(() => {
-      if (payload.kind === 'move' && payload.nodeId) {
-        const source = findNode(activePage.value!.root, payload.nodeId)
-        const oldParent = findParent(activePage.value!.root, payload.nodeId)
-        const target = findNode(activePage.value!.root, parentId)
-        if (
-          !source ||
-          source.locked ||
-          !oldParent ||
-          !('children' in oldParent) ||
-          !target ||
-          !('children' in target)
-        )
-          return
-        let ancestor: LayoutNode | undefined = target
-        while (ancestor) {
-          if (ancestor.id === source.id) return
-          const next = findParent(activePage.value!.root, ancestor.id)
-          if (!next) break
-          ancestor = next
-        }
-        oldParent.children = oldParent.children.filter((child) => child.id !== source.id)
-        target.children.push(source)
-        selectedNodeId.value = source.id
-        return
-      }
-      if (!payload.value || (payload.kind !== 'layout' && payload.kind !== 'component')) return
-      const node = makeNode(payload.kind, payload.value)
-      if (node && insertNode(activePage.value!.root, parentId, node)) selectedNodeId.value = node.id
-    })
+    if (payload.kind === 'move' && payload.nodeId) {
+      moveNodeWithHistory(payload.nodeId, targetId, position)
+      return
+    }
+    if (!payload.value || (payload.kind !== 'layout' && payload.kind !== 'component')) return
+    const node = makeNode(payload.kind, payload.value)
+    if (!node) return
+    const nextPage = cloneNode(activePage.value)
+    if (!insertNodeAt(nextPage.root, targetId, position, node)) {
+      ElMessage.warning('目标位置不接受该节点')
+      return
+    }
+    checkpoint()
+    activePage.value.root = nextPage.root
+    selectedNodeId.value = node.id
+    changed()
   } catch {
     ElMessage.warning('无法识别拖拽内容')
   }
 }
 
-function handleReorder(parentId: string, nextChildren: LayoutNode[]) {
+function moveNodeWithHistory(nodeId: string, targetId: string, position: DesignerDropPosition) {
   if (!activePage.value || !canEdit.value) return
-  const parent = findNode(activePage.value.root, parentId)
-  if (!parent || !('children' in parent)) return
+  const nextPage = cloneNode(activePage.value)
+  const result = moveNodeAt(nextPage, nodeId, targetId, position)
+  if (!result.moved) {
+    ElMessage.warning(result.reason || '当前节点无法移动到目标位置')
+    return
+  }
   checkpoint()
-  parent.children = nextChildren
+  activePage.value.root = nextPage.root
+  selectedNodeId.value = nodeId
   changed()
+}
+
+function structureNodeData(node: unknown) {
+  return (node as { data: DesignerStructureNode }).data
+}
+
+function allowStructureDrag(node: unknown) {
+  const data = structureNodeData(node)
+  return data.kind === 'node' && data.pageSlug === activePageSlug.value && !data.locked
+}
+
+function allowStructureDrop(dragging: unknown, dropping: unknown, type: 'prev' | 'inner' | 'next') {
+  const source = structureNodeData(dragging)
+  const target = structureNodeData(dropping)
+  if (
+    source.kind !== 'node' ||
+    target.kind !== 'node' ||
+    source.pageSlug !== activePageSlug.value ||
+    target.pageSlug !== activePageSlug.value
+  )
+    return false
+  if (type === 'inner') {
+    const node = activePage.value ? findNode(activePage.value.root, target.nodeId || '') : undefined
+    return Boolean(node && 'children' in node)
+  }
+  return true
+}
+
+function handleStructureDrop(dragging: unknown, dropping: unknown, type: 'before' | 'after' | 'inner') {
+  const sourceId = structureNodeData(dragging).nodeId
+  const targetId = structureNodeData(dropping).nodeId
+  if (!sourceId || !targetId) return
+  moveNodeWithHistory(sourceId, targetId, type === 'inner' ? 'inside' : type)
 }
 
 function addToSelected(kind: 'layout' | 'component', value: string) {
@@ -615,6 +658,88 @@ async function createSymbol() {
       root: cloneNode(selectedNode.value!),
     }
   })
+}
+
+const advancedKeys = ['props', 'layout', 'style', 'dataSource', 'actions', 'visibleWhen'] as const
+
+function refreshAdvancedJson() {
+  const node = selectedNode.value
+  if (!node) {
+    advancedJson.value = ''
+    return
+  }
+  const editable = node as unknown as Record<string, unknown>
+  advancedJson.value = JSON.stringify(
+    Object.fromEntries(
+      advancedKeys
+        .filter((key) => key in editable && editable[key] !== undefined)
+        .map((key) => [key, editable[key]]),
+    ),
+    null,
+    2,
+  )
+}
+
+function componentProperty(key: string) {
+  return selectedNode.value?.type === 'component' ? selectedNode.value.props?.[key] : undefined
+}
+
+function setComponentProperty(key: string, value: unknown) {
+  if (selectedNode.value?.type !== 'component' || !['string', 'number', 'boolean'].includes(typeof value))
+    return
+  selectedNode.value.props ||= {}
+  selectedNode.value.props[key] = value as string | number | boolean
+}
+
+function applyAdvancedJson() {
+  if (!selectedNode.value || !canEdit.value) return
+  try {
+    const parsed = JSON.parse(advancedJson.value) as Record<string, unknown>
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object')
+      throw new Error('高级属性必须是 JSON 对象')
+    const unknownKeys = Object.keys(parsed).filter(
+      (key) => !advancedKeys.includes(key as (typeof advancedKeys)[number]),
+    )
+    if (unknownKeys.length) throw new Error(`不允许修改字段：${unknownKeys.join('、')}`)
+    if (containsDangerousKey(parsed)) throw new Error('属性中不能包含 API、SQL、脚本或事件处理器字段')
+    mutate(() => {
+      const node = selectedNode.value as LayoutNode & Record<string, unknown>
+      Object.entries(parsed).forEach(([key, value]) => {
+        node[key] = cloneNode(value)
+      })
+    })
+    refreshAdvancedJson()
+    ElMessage.success('高级属性已应用到画布')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '高级属性 JSON 无效')
+  }
+}
+
+function containsDangerousKey(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  if (Array.isArray(value)) return value.some(containsDangerousKey)
+  return Object.entries(value).some(
+    ([key, child]) =>
+      /^(api|apiUrl|endpoint|sql|script|javascript|eventHandler|componentUrl)$/i.test(key) ||
+      containsDangerousKey(child),
+  )
+}
+
+function applyAiProposal(proposal: PortalDesignProposal) {
+  if (!config.value || proposal.pageSlug !== activePageSlug.value) return
+  mutate(() => {
+    if (proposal.scope === 'page') {
+      config.value!.pages[proposal.pageSlug] = cloneNode(proposal.target) as unknown as LowCodePage
+    } else {
+      const page = config.value!.pages[proposal.pageSlug]
+      const next = cloneNode(proposal.target) as unknown as LayoutNode
+      if (page.root.id === proposal.nodeId) page.root = next
+      else if (!replaceNode(page.root, next)) throw new Error('AI 提案目标节点已发生变化')
+      selectedNodeId.value = next.id
+    }
+    normalizeEditableConfig(config.value!)
+  })
+  refreshAdvancedJson()
 }
 
 async function save() {
@@ -746,6 +871,10 @@ watch(
   { deep: true },
 )
 watch([activePageSlug, breakpoint], () => fitCanvas())
+watch([selectedNodeId, inspectorMode], () => {
+  propertyBaseline = undefined
+  if (inspectorMode.value === 'advanced') refreshAdvancedJson()
+})
 
 onMounted(async () => {
   await nextTick()
@@ -937,10 +1066,14 @@ onBeforeUnmount(() => {
             :current-node-key="selectedStructureKey"
             :default-expanded-keys="expandedKeys"
             :expand-on-click-node="true"
+            draggable
+            :allow-drag="allowStructureDrag"
+            :allow-drop="allowStructureDrop"
             highlight-current
             @node-click="selectStructure"
             @node-expand="rememberExpanded"
             @node-collapse="rememberCollapsed"
+            @node-drop="handleStructureDrop"
           >
             <template #default="{ data }">
               <div class="low-code-structure__row" :class="`is-${(data as DesignerStructureNode).kind}`">
@@ -1029,6 +1162,16 @@ onBeforeUnmount(() => {
             ]"
           />
           <div>
+            <el-button
+              type="success"
+              plain
+              size="small"
+              :icon="MagicStick"
+              :disabled="!canEdit"
+              @click="aiDrawerOpen = true"
+            >
+              AI 设计
+            </el-button>
             <el-button v-if="livePagePath" link type="primary" @click="openLivePage">
               打开真实页面
             </el-button>
@@ -1050,7 +1193,6 @@ onBeforeUnmount(() => {
                 :breakpoint="breakpoint"
                 @select="selectedNodeId = $event"
                 @drop="handleDrop"
-                @reorder="handleReorder"
               />
             </div>
           </div>
@@ -1078,12 +1220,19 @@ onBeforeUnmount(() => {
           <el-tab-pane label="样式" name="style" />
           <el-tab-pane label="数据" name="data" />
           <el-tab-pane label="交互" name="interaction" />
+          <el-tab-pane label="高级" name="advanced" />
         </el-tabs>
 
-        <el-form v-if="selectedNode" label-position="top" class="low-code-inspector__form">
+        <el-form
+          v-if="selectedNode"
+          label-position="top"
+          class="low-code-inspector__form"
+          @focusin="beginPropertyEdit"
+          @pointerdown.capture="beginPropertyEdit"
+        >
           <template v-if="inspectorMode === 'layout'">
             <el-form-item label="节点名称">
-              <el-input v-model="selectedNode.name" :disabled="!canEdit" @change="changed" />
+              <el-input v-model="selectedNode.name" :disabled="!canEdit" @change="commitPropertyEdit" />
             </el-form-item>
             <div class="low-code-field-grid">
               <el-form-item label="桌面列宽">
@@ -1092,7 +1241,7 @@ onBeforeUnmount(() => {
                   :min="1"
                   :max="12"
                   :disabled="!canEdit"
-                  @change="changed"
+                  @change="commitPropertyEdit"
                 />
               </el-form-item>
               <el-form-item label="平板列宽">
@@ -1101,7 +1250,7 @@ onBeforeUnmount(() => {
                   :min="1"
                   :max="8"
                   :disabled="!canEdit"
-                  @change="changed"
+                  @change="commitPropertyEdit"
                 />
               </el-form-item>
               <el-form-item label="手机列宽">
@@ -1110,7 +1259,7 @@ onBeforeUnmount(() => {
                   :min="1"
                   :max="4"
                   :disabled="!canEdit"
-                  @change="changed"
+                  @change="commitPropertyEdit"
                 />
               </el-form-item>
             </div>
@@ -1120,14 +1269,14 @@ onBeforeUnmount(() => {
                 :min="0"
                 :max="48"
                 :disabled="!canEdit"
-                @change="changed"
+                @change="commitPropertyEdit"
               />
             </el-form-item>
             <el-form-item label="当前断点隐藏">
               <el-switch
                 v-model="selectedNode.layout!.hidden![breakpoint]"
                 :disabled="!canEdit || selectedNode.locked"
-                @change="changed"
+                @change="commitPropertyEdit"
               />
             </el-form-item>
           </template>
@@ -1139,9 +1288,50 @@ onBeforeUnmount(() => {
                 disabled
               />
             </el-form-item>
-            <el-form-item v-if="selectedNode.type === 'component'" label="标题文案">
-              <el-input v-model="selectedTitle" :disabled="!canEdit" @change="changed" />
-            </el-form-item>
+            <template v-if="selectedNode.type === 'component'">
+              <el-form-item v-for="field in selectedComponentFields" :key="field.key" :label="field.label">
+                <el-input
+                  v-if="field.type === 'text' || field.type === 'textarea'"
+                  :model-value="String(componentProperty(field.key) ?? '')"
+                  :type="field.type === 'textarea' ? 'textarea' : 'text'"
+                  :rows="field.type === 'textarea' ? 4 : undefined"
+                  :placeholder="field.placeholder"
+                  :disabled="!canEdit"
+                  @update:model-value="setComponentProperty(field.key, $event)"
+                  @change="commitPropertyEdit"
+                />
+                <el-input-number
+                  v-else-if="field.type === 'number'"
+                  :model-value="Number(componentProperty(field.key) ?? field.min ?? 0)"
+                  :min="field.min"
+                  :max="field.max"
+                  :disabled="!canEdit"
+                  @update:model-value="setComponentProperty(field.key, $event)"
+                  @change="commitPropertyEdit"
+                />
+                <el-switch
+                  v-else-if="field.type === 'boolean'"
+                  :model-value="Boolean(componentProperty(field.key))"
+                  :disabled="!canEdit"
+                  @update:model-value="setComponentProperty(field.key, $event)"
+                  @change="commitPropertyEdit"
+                />
+                <el-select
+                  v-else
+                  :model-value="String(componentProperty(field.key) ?? '')"
+                  :disabled="!canEdit"
+                  @update:model-value="setComponentProperty(field.key, $event)"
+                  @change="commitPropertyEdit"
+                >
+                  <el-option
+                    v-for="option in field.options"
+                    :key="option.value"
+                    :label="option.label"
+                    :value="option.value"
+                  />
+                </el-select>
+              </el-form-item>
+            </template>
             <el-alert
               title="属性由组件 Schema 约束；未知字段在发布校验时会被拒绝。"
               type="info"
@@ -1155,11 +1345,15 @@ onBeforeUnmount(() => {
                 v-model="selectedNode.style!.background"
                 placeholder="var(--kma-color-surface)"
                 :disabled="!canEdit"
-                @change="changed"
+                @change="commitPropertyEdit"
               />
             </el-form-item>
             <el-form-item label="圆角">
-              <el-select v-model="selectedNode.style!.radius" :disabled="!canEdit" @change="changed">
+              <el-select
+                v-model="selectedNode.style!.radius"
+                :disabled="!canEdit"
+                @change="commitPropertyEdit"
+              >
                 <el-option label="无" value="0px" />
                 <el-option label="小" value="8px" />
                 <el-option label="标准" value="12px" />
@@ -1173,7 +1367,7 @@ onBeforeUnmount(() => {
                 :max="64"
                 :step="4"
                 :disabled="!canEdit"
-                @change="changed"
+                @change="commitPropertyEdit"
               />
             </el-form-item>
           </template>
@@ -1184,7 +1378,7 @@ onBeforeUnmount(() => {
                 v-model="selectedNode.dataSource!.source"
                 clearable
                 :disabled="!canEdit"
-                @change="changed"
+                @change="commitPropertyEdit"
               >
                 <el-option
                   v-for="source in [
@@ -1209,14 +1403,14 @@ onBeforeUnmount(() => {
             />
           </template>
 
-          <template v-else>
+          <template v-else-if="inspectorMode === 'interaction'">
             <el-form-item label="点击动作">
               <el-select
                 v-if="selectedNode.type === 'component'"
                 v-model="selectedNode.actions![0].type"
                 clearable
                 :disabled="!canEdit"
-                @change="changed"
+                @change="commitPropertyEdit"
               >
                 <el-option label="页面跳转" value="navigate" />
                 <el-option label="执行搜索" value="search" />
@@ -1231,6 +1425,25 @@ onBeforeUnmount(() => {
               type="warning"
               :closable="false"
             />
+          </template>
+          <template v-else>
+            <el-alert
+              title="仅允许编辑安全属性；节点 ID、类型、锁定状态和子节点结构受到保护。"
+              type="info"
+              :closable="false"
+            />
+            <el-form-item label="高级属性 JSON">
+              <el-input
+                v-model="advancedJson"
+                type="textarea"
+                :rows="18"
+                spellcheck="false"
+                :disabled="!canEdit"
+              />
+            </el-form-item>
+            <el-button type="primary" plain :disabled="!canEdit" @click="applyAdvancedJson">
+              应用高级属性
+            </el-button>
           </template>
         </el-form>
         <el-empty v-else description="选择节点后编辑属性" />
@@ -1249,6 +1462,17 @@ onBeforeUnmount(() => {
         {{ issues.length ? `${issues.length} 个校验问题` : '布局状态正常' }}
       </button>
     </footer>
+    <PortalAiDesignDrawer
+      v-model="aiDrawerOpen"
+      :site-key="selectedSiteKey"
+      :version-id="activeVersion?.versionId"
+      :lock-version="activeVersion?.lockVersion"
+      :config="config"
+      :page-slug="activePageSlug"
+      :selected-node="selectedNode"
+      :can-edit="canEdit"
+      @apply="applyAiProposal"
+    />
     <PortalCodeEditorDrawer v-model="codeDrawerOpen" @changed="refreshCodePackages" />
   </div>
 </template>

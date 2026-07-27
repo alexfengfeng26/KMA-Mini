@@ -77,6 +77,13 @@ knowledge:
       model: ${KMA_LOCAL_LLM_MODEL:qwen2.5}
       api-key: ${KMA_LOCAL_LLM_API_KEY:ollama}
       max-retry: ${KMA_LOCAL_LLM_MAX_RETRY:3}
+  portal-design:
+    enabled: ${KMA_PORTAL_AI_ENABLED:true}
+    base-url: ${KMA_PORTAL_AI_BASE_URL:https://api.deepseek.com}
+    model: ${KMA_PORTAL_AI_MODEL:deepseek-v4-flash}
+    api-key: ${KMA_DEEPSEEK_API_KEY:}
+    timeout-seconds: ${KMA_PORTAL_AI_TIMEOUT_SECONDS:90}
+    max-output-tokens: ${KMA_PORTAL_AI_MAX_OUTPUT_TOKENS:16384}
   rerank:
     default-provider: ${KMA_RERANK_PROVIDER:bge-reranker-base}
     base-url: ${KMA_RERANK_BASE_URL:}

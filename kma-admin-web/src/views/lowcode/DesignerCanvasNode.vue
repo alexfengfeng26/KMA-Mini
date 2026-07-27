@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { useDragAndDrop } from '@formkit/drag-and-drop/vue'
-import { computed, watch } from 'vue'
+import { computed, ref } from 'vue'
 import type { LayoutNode, PortalBreakpoint, PortalCoreComponent } from '../../cms/siteConfig'
 import { blockDefinition } from '../../cms/blockDefinitions'
 import { responsiveValue } from '../../cms/v3/contract'
+import type { DesignerDropPosition } from '../../cms/v3/designerTree'
 
 const coreComponentMeta: Record<PortalCoreComponent, { title: string; description: string; marker: string }> =
   {
@@ -57,8 +57,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   select: [nodeId: string]
-  drop: [parentId: string, payload: string]
-  reorder: [parentId: string, children: LayoutNode[]]
+  drop: [targetId: string, position: DesignerDropPosition, payload: string]
 }>()
 
 const children = computed(() => ('children' in props.node ? props.node.children : []))
@@ -94,49 +93,44 @@ const gridStyle = computed(() => ({
     ),
   ),
 }))
-const [childrenContainer, draggableChildren] = useDragAndDrop<LayoutNode>(children.value, {
-  group: 'kma-low-code-layout',
-  sortable: true,
-  dropZone: true,
-  dragHandle: '.designer-node__label',
-})
-
-watch(
-  () => children.value,
-  (next) => {
-    if (next.map((item) => item.id).join('|') !== draggableChildren.value.map((item) => item.id).join('|'))
-      draggableChildren.value = [...next]
-  },
-)
-
-watch(draggableChildren, (next) => {
-  if (
-    acceptsChildren.value &&
-    next.map((item) => item.id).join('|') !== children.value.map((item) => item.id).join('|')
-  )
-    emit('reorder', props.node.id, [...next])
-})
+const dropPosition = ref<DesignerDropPosition>()
 
 function drop(event: DragEvent) {
-  if (!acceptsChildren.value) return
   const payload = event.dataTransfer?.getData('application/x-kma-node')
   if (payload) {
     event.preventDefault()
     event.stopPropagation()
-    emit('drop', props.node.id, payload)
+    const position = dropPosition.value || (acceptsChildren.value ? 'inside' : 'after')
+    dropPosition.value = undefined
+    emit('drop', props.node.id, position, payload)
   }
 }
 
 function dragOver(event: DragEvent) {
-  if (event.dataTransfer?.types.includes('application/x-kma-node')) event.preventDefault()
+  if (!event.dataTransfer?.types.includes('application/x-kma-node')) return
+  event.preventDefault()
+  event.stopPropagation()
+  const current = event.currentTarget as HTMLElement
+  const bounds = current.getBoundingClientRect()
+  const ratio = bounds.height ? (event.clientY - bounds.top) / bounds.height : 0.5
+  dropPosition.value =
+    ratio < 0.25 ? 'before' : ratio > 0.75 ? 'after' : acceptsChildren.value ? 'inside' : 'after'
 }
 
-function forwardDrop(parentId: string, payload: string) {
-  emit('drop', parentId, payload)
+function dragNode(event: DragEvent) {
+  if (props.node.locked) {
+    event.preventDefault()
+    return
+  }
+  event.dataTransfer?.setData(
+    'application/x-kma-node',
+    JSON.stringify({ kind: 'move', nodeId: props.node.id }),
+  )
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
 }
 
-function forwardReorder(parentId: string, nextChildren: LayoutNode[]) {
-  emit('reorder', parentId, nextChildren)
+function forwardDrop(targetId: string, position: DesignerDropPosition, payload: string) {
+  emit('drop', targetId, position, payload)
 }
 </script>
 
@@ -145,7 +139,11 @@ function forwardReorder(parentId: string, nextChildren: LayoutNode[]) {
     class="designer-node"
     :class="[
       `designer-node--${node.type}`,
-      { 'is-selected': selectedId === node.id, 'accepts-children': acceptsChildren },
+      {
+        'is-selected': selectedId === node.id,
+        'accepts-children': acceptsChildren,
+        [`is-drop-${dropPosition}`]: dropPosition,
+      },
     ]"
     :style="gridStyle"
     :data-node-id="node.id"
@@ -153,22 +151,28 @@ function forwardReorder(parentId: string, nextChildren: LayoutNode[]) {
     @click.stop="emit('select', node.id)"
     @focus="emit('select', node.id)"
     @dragover="dragOver"
+    @dragleave.self="dropPosition = undefined"
     @drop="drop"
   >
-    <header class="designer-node__label">
+    <header
+      class="designer-node__label"
+      :draggable="!node.locked"
+      :title="node.locked ? '锁定节点不能移动' : '拖拽调整位置'"
+      @dragstart.stop="dragNode"
+      @dragend="dropPosition = undefined"
+    >
       <span>{{ label }}</span>
       <small>{{ node.type }}</small>
     </header>
-    <div v-if="acceptsChildren" ref="childrenContainer" class="designer-node__children">
+    <div v-if="acceptsChildren" class="designer-node__children">
       <DesignerCanvasNode
-        v-for="child in draggableChildren"
+        v-for="child in children"
         :key="child.id"
         :node="child"
         :selected-id="selectedId"
         :breakpoint="breakpoint"
         @select="emit('select', $event)"
         @drop="forwardDrop"
-        @reorder="forwardReorder"
       />
       <div v-if="children.length === 0" class="designer-node__empty">拖入组件或布局</div>
     </div>
@@ -196,6 +200,45 @@ function forwardReorder(parentId: string, nextChildren: LayoutNode[]) {
 </template>
 
 <style scoped>
+.designer-node {
+  position: relative;
+}
+
+.designer-node.is-drop-before::before,
+.designer-node.is-drop-after::after {
+  position: absolute;
+  right: 4px;
+  left: 4px;
+  z-index: 4;
+  height: 3px;
+  content: '';
+  background: #08735e;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px rgb(8 115 94 / 0.14);
+}
+
+.designer-node.is-drop-before::before {
+  top: -3px;
+}
+
+.designer-node.is-drop-after::after {
+  bottom: -3px;
+}
+
+.designer-node.is-drop-inside {
+  outline: 2px solid #0b8f73;
+  outline-offset: 2px;
+  background: rgb(11 143 115 / 0.05);
+}
+
+.designer-node__label[draggable='true'] {
+  cursor: grab;
+}
+
+.designer-node__label[draggable='true']:active {
+  cursor: grabbing;
+}
+
 .designer-component-preview {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);

@@ -145,10 +145,16 @@ $env:KMA_INGESTION_WORKER_ENABLED = "true"
 ```text
 Embedding: local-bge-m3 / http://localhost:9997/v1 / bge-m3
 LLM:       ollama / http://localhost:11434/v1 / qwen2.5
+门户设计: DeepSeek / https://api.deepseek.com / deepseek-v4-flash
 Reranker:  可选；未配置时使用中文词项覆盖率降级重排
 ```
 
 模型不可用时应用仍可启动，依赖状态显示 `DEGRADED`；问答、Embedding 或重排能力会按 Profile 和 fallback 链返回明确错误或降级结果。模型密钥只能通过环境变量或 Secret Provider 注入，数据库和前端只保存密钥别名。
+
+门户设计中心的 AI 设计独立使用 DeepSeek V4 Flash，不会切换知识问答模型。启动后端前设置
+`KMA_DEEPSEEK_API_KEY` 即可启用；未配置时设计器会明确显示不可用。该密钥不会写入数据库、
+仓库、日志或前端响应。AI 结果只生成候选草稿，必须在设计器中预览并确认应用，之后仍需手动
+保存、审核和发布。
 
 关键环境变量参见 [.env.example](.env.example)。
 

@@ -168,6 +168,48 @@ export function rollbackPortalVersion(siteKey: string, versionId: number) {
   })
 }
 
+export interface PortalDesignCapability {
+  available: boolean
+  provider: string
+  model: string
+  reason?: string
+}
+
+export interface PortalDesignProposal {
+  scope: 'page' | 'node'
+  pageSlug: string
+  nodeId?: string
+  model: string
+  summary: string
+  warnings: string[]
+  target: Record<string, unknown>
+  promptTokens: number
+  completionTokens: number
+}
+
+export function getPortalDesignCapability(siteKey: string) {
+  return authorizedJson<PortalDesignCapability>(adminPath(siteKey, '/design-capability'))
+}
+
+export function createPortalDesignProposal(
+  siteKey: string,
+  body: {
+    versionId: number
+    expectedLockVersion: number
+    config: PortalSiteConfig
+    scope: 'page' | 'node'
+    pageSlug: string
+    nodeId?: string
+    instruction: string
+  },
+) {
+  return authorizedJson<PortalDesignProposal>(adminPath(siteKey, '/design-proposals'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
 export function recordPortalEvent(
   siteKey: string,
   body: {
