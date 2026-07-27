@@ -266,11 +266,61 @@ test('门户设计中心加载站点 V3 草稿并提供响应式编辑器', asyn
   await expect(page.getByText('桌面 12 列')).toBeVisible()
   await expect(page.getByRole('button', { name: '保存草稿' })).toBeEnabled()
 
-  await page.getByRole('button', { name: '资料中心 library', exact: true }).click()
+  await page.getByRole('treeitem', { name: '资料中心 library', exact: true }).click()
   await expect(page.getByText('资料检索结果')).toBeVisible()
   await expect(page.getByText('content-results')).toBeVisible()
   await expect(page.getByText('系统核心组件 · 真实数据在门户运行时加载')).toBeVisible()
   await expect(page.getByRole('button', { name: '打开真实页面' })).toBeVisible()
+  await page.getByRole('treeitem', { name: '资料中心页面 section', exact: true }).click()
+  await page.getByRole('treeitem', { name: '资料中心组件 component 锁定' }).click()
+  await expect(page.getByTestId('inspector-panel')).toContainText('library-core')
+  await expect(page.getByText('自动', { exact: true })).toBeVisible()
+  await page.getByText('手机 4 列', { exact: true }).click()
+  await expect(page.getByText('390px · 110%')).toBeVisible()
+  const zoomSlider = page.getByRole('slider', { name: '滑块介于 40 至 110' })
+  await zoomSlider.press('ArrowLeft')
+  await expect(page.getByText('手动', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '适应' }).click()
+  await expect(page.getByText('自动', { exact: true })).toBeVisible()
+})
+
+test('门户设计中心在中等宽度将属性栏改为抽屉并扩大画布', async ({ page }) => {
+  await page.setViewportSize({ width: 1220, height: 800 })
+  await mockExperience(page)
+  await page.goto('/console/portal-appearance')
+
+  await expect(page.getByTestId('portal-designer')).toBeVisible()
+  await expect(page.getByTestId('inspector-panel')).toBeHidden()
+  const stageWidth = await page
+    .getByTestId('designer-stage')
+    .evaluate((element) => element.getBoundingClientRect().width)
+  expect(stageWidth).toBeGreaterThanOrEqual(680)
+
+  await page.getByRole('button', { name: '属性' }).click()
+  await expect(page.getByTestId('inspector-panel')).toBeVisible()
+  const stageWidthWithDrawer = await page
+    .getByTestId('designer-stage')
+    .evaluate((element) => element.getBoundingClientRect().width)
+  expect(stageWidthWithDrawer).toBe(stageWidth)
+})
+
+test('门户设计中心窄宽度使用双抽屉并支持沉浸模式', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 760 })
+  await mockExperience(page)
+  await page.goto('/console/portal-appearance')
+
+  await expect(page.getByTestId('structure-panel')).toBeHidden()
+  await expect(page.getByTestId('inspector-panel')).toBeHidden()
+  await expect(page.getByText('桌面 12 列', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '结构' }).click()
+  await expect(page.getByTestId('structure-panel')).toBeVisible()
+  await page.getByRole('button', { name: '关闭结构面板' }).click()
+  await expect(page.getByTestId('structure-panel')).toBeHidden()
+
+  await page.getByRole('button', { name: '沉浸设计' }).click()
+  await expect(page.getByTestId('portal-designer')).toHaveClass(/is-immersive/)
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('portal-designer')).not.toHaveClass(/is-immersive/)
 })
 
 test('门户设计中心跟随最新审核版本并显示完整审核发布动作', async ({ page }) => {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { FullScreen, MoreFilled, Operation, Setting } from '@element-plus/icons-vue'
 import {
   createPortalDraft,
   getPortalVersion,
@@ -31,12 +32,29 @@ import {
   uniqueNodeId,
 } from '../../cms/v3/designerTree'
 import { migratePortalConfigV2ToV3 } from '../../cms/v3/migrateV2'
+import {
+  buildDesignerStructure,
+  fitCanvasZoom,
+  structureSelectionKey,
+  type DesignerStructureNode,
+} from '../../cms/v3/designerWorkspace'
 import { useAuthStore } from '../../stores/auth'
 import DesignerCanvasNode from './DesignerCanvasNode.vue'
 import PortalCodeEditorDrawer from './PortalCodeEditorDrawer.vue'
 
-type LeftMode = 'pages' | 'layers' | 'components' | 'symbols'
+type LeftMode = 'structure' | 'components' | 'symbols'
 type InspectorMode = 'layout' | 'content' | 'style' | 'data' | 'interaction'
+type ZoomMode = 'fit' | 'manual'
+type MoreCommand = 'undo' | 'redo' | 'code' | 'validate'
+
+interface WorkspacePreferences {
+  version: 1
+  structureOpen: boolean
+  inspectorOpen: boolean
+  expandedKeys: string[]
+  zoomMode: ZoomMode
+  zoom: number
+}
 
 const auth = useAuthStore()
 const sites = ref<PortalSiteSummary[]>([])
@@ -46,7 +64,7 @@ const activeVersion = ref<PortalConfigVersion>()
 const config = ref<PortalSiteConfigV3>()
 const activePageSlug = ref('home')
 const selectedNodeId = ref('')
-const leftMode = ref<LeftMode>('pages')
+const leftMode = ref<LeftMode>('structure')
 const inspectorMode = ref<InspectorMode>('layout')
 const breakpoint = ref<PortalBreakpoint>('desktop')
 const loading = ref(false)
@@ -59,6 +77,20 @@ const future = ref<PortalSiteConfigV3[]>([])
 const restoring = ref(false)
 const codeDrawerOpen = ref(false)
 const codePackages = ref<PortalCodePackage[]>([])
+const designerRoot = ref<HTMLElement>()
+const stageViewport = ref<HTMLElement>()
+const canvasElement = ref<HTMLElement>()
+const workspaceWidth = ref(1280)
+const canvasContentHeight = ref(720)
+const structureOpen = ref(true)
+const inspectorOpen = ref(true)
+const immersive = ref(false)
+const expandedKeys = ref<string[]>(['group:shell', 'group:pages', 'page:home'])
+const zoomMode = ref<ZoomMode>('fit')
+let designerResizeObserver: ResizeObserver | undefined
+let stageResizeObserver: ResizeObserver | undefined
+let canvasResizeObserver: ResizeObserver | undefined
+let preferencesReady = false
 
 const canEdit = computed(
   () =>
@@ -110,7 +142,11 @@ const nodeCount = computed(() => {
 const canvasWidth = computed(() =>
   breakpoint.value === 'desktop' ? 1440 : breakpoint.value === 'tablet' ? 1024 : 390,
 )
+const minimumCanvasHeight = computed(() =>
+  breakpoint.value === 'desktop' ? 720 : breakpoint.value === 'tablet' ? 768 : 844,
+)
 const snapshotKey = computed(() => `kma-low-code-v3:${selectedSiteKey.value}`)
+const workspacePreferencesKey = computed(() => `kma-low-code-workspace:v1:${selectedSiteKey.value}`)
 const breadcrumbs = computed(() => {
   const result: string[] = []
   let current = selectedNode.value
@@ -120,11 +156,26 @@ const breadcrumbs = computed(() => {
   }
   return result
 })
-const layerNodes = computed(() => {
-  const result: Array<{ node: LayoutNode; depth: number }> = []
-  if (activePage.value) walkNodes(activePage.value.root, (node, depth) => result.push({ node, depth }))
-  return result
-})
+const structureData = computed(() => (config.value ? buildDesignerStructure(config.value) : []))
+const selectedStructureKey = computed(() =>
+  selectedNodeId.value === activePage.value?.root.id
+    ? `page:${activePageSlug.value}`
+    : structureSelectionKey(activePageSlug.value, selectedNodeId.value),
+)
+const compactInspector = computed(() => workspaceWidth.value < 1200)
+const compactStructure = computed(() => workspaceWidth.value < 900)
+const canvasScale = computed(() => zoom.value / 100)
+const canvasFrameStyle = computed(() => ({
+  width: `${Math.round(canvasWidth.value * canvasScale.value)}px`,
+  height: `${Math.round(
+    Math.max(canvasContentHeight.value, minimumCanvasHeight.value) * canvasScale.value,
+  )}px`,
+}))
+const canvasStyle = computed(() => ({
+  width: `${canvasWidth.value}px`,
+  minHeight: `${minimumCanvasHeight.value}px`,
+  transform: `scale(${canvasScale.value})`,
+}))
 const livePagePath = computed(() => {
   const siteKey = encodeURIComponent(selectedSiteKey.value)
   const page = activePage.value
@@ -143,6 +194,117 @@ function checkpoint() {
 
 function openLivePage() {
   if (livePagePath.value) window.open(livePagePath.value, '_blank', 'noopener,noreferrer')
+}
+
+function defaultPreferences(): WorkspacePreferences {
+  return {
+    version: 1,
+    structureOpen: workspaceWidth.value >= 900,
+    inspectorOpen: workspaceWidth.value >= 1200,
+    expandedKeys: ['group:shell', 'group:pages', `page:${activePageSlug.value}`],
+    zoomMode: 'fit',
+    zoom: 90,
+  }
+}
+
+function persistWorkspacePreferences() {
+  if (!preferencesReady || !selectedSiteKey.value) return
+  const value: WorkspacePreferences = {
+    version: 1,
+    structureOpen: structureOpen.value,
+    inspectorOpen: inspectorOpen.value,
+    expandedKeys: expandedKeys.value,
+    zoomMode: zoomMode.value,
+    zoom: zoom.value,
+  }
+  localStorage.setItem(workspacePreferencesKey.value, JSON.stringify(value))
+}
+
+function restoreWorkspacePreferences() {
+  preferencesReady = false
+  const defaults = defaultPreferences()
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(workspacePreferencesKey.value) || 'null',
+    ) as Partial<WorkspacePreferences> | null
+    structureOpen.value =
+      typeof stored?.structureOpen === 'boolean' ? stored.structureOpen : defaults.structureOpen
+    inspectorOpen.value =
+      typeof stored?.inspectorOpen === 'boolean' ? stored.inspectorOpen : defaults.inspectorOpen
+    expandedKeys.value = Array.isArray(stored?.expandedKeys)
+      ? stored.expandedKeys.filter((key): key is string => typeof key === 'string')
+      : defaults.expandedKeys
+    zoomMode.value = stored?.zoomMode === 'manual' ? 'manual' : 'fit'
+    zoom.value =
+      typeof stored?.zoom === 'number' ? Math.max(40, Math.min(110, Math.round(stored.zoom))) : defaults.zoom
+  } catch {
+    localStorage.removeItem(workspacePreferencesKey.value)
+    structureOpen.value = defaults.structureOpen
+    inspectorOpen.value = defaults.inspectorOpen
+    expandedKeys.value = defaults.expandedKeys
+    zoomMode.value = defaults.zoomMode
+    zoom.value = defaults.zoom
+  }
+  preferencesReady = true
+}
+
+async function fitCanvas() {
+  zoomMode.value = 'fit'
+  await nextTick()
+  zoom.value = fitCanvasZoom(stageViewport.value?.clientWidth || 0, canvasWidth.value)
+  persistWorkspacePreferences()
+}
+
+function setManualZoom() {
+  zoomMode.value = 'manual'
+  persistWorkspacePreferences()
+}
+
+function toggleImmersive() {
+  immersive.value = !immersive.value
+  nextTick(fitCanvas)
+}
+
+function toggleStructurePanel() {
+  structureOpen.value = !structureOpen.value
+  if (structureOpen.value && compactStructure.value) inspectorOpen.value = false
+}
+
+function toggleInspectorPanel() {
+  inspectorOpen.value = !inspectorOpen.value
+  if (inspectorOpen.value && compactStructure.value) structureOpen.value = false
+}
+
+function handleEscape(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return
+  if (compactInspector.value && inspectorOpen.value) inspectorOpen.value = false
+  else if (compactStructure.value && structureOpen.value) structureOpen.value = false
+  else if (immersive.value) immersive.value = false
+}
+
+function rememberExpanded(node: DesignerStructureNode) {
+  if (!expandedKeys.value.includes(node.key)) expandedKeys.value = [...expandedKeys.value, node.key]
+}
+
+function rememberCollapsed(node: DesignerStructureNode) {
+  expandedKeys.value = expandedKeys.value.filter((key) => key !== node.key)
+}
+
+function selectStructure(node: DesignerStructureNode) {
+  if (node.kind === 'group' || !node.pageSlug) return
+  activePageSlug.value = node.pageSlug
+  const page = activePage.value
+  selectedNodeId.value = node.nodeId || page?.root.id || ''
+  if (!expandedKeys.value.includes(`page:${node.pageSlug}`))
+    expandedKeys.value = [...expandedKeys.value, `page:${node.pageSlug}`]
+  if (compactStructure.value) structureOpen.value = false
+}
+
+function handleMoreCommand(command: MoreCommand) {
+  if (command === 'undo') undo()
+  else if (command === 'redo') redo()
+  else if (command === 'code') codeDrawerOpen.value = true
+  else validateDraft()
 }
 
 function normalizeEditableConfig(value: PortalSiteConfigV3) {
@@ -235,6 +397,8 @@ async function loadSite(siteKey: string) {
     future.value = []
     dirty.value = false
     restoreLocalSnapshot()
+    restoreWorkspacePreferences()
+    await fitCanvas()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '站点配置加载失败')
   } finally {
@@ -260,12 +424,6 @@ async function load() {
 
 async function refreshCodePackages() {
   codePackages.value = await listPortalCodePackages()
-}
-
-function selectPage(slug: string) {
-  activePageSlug.value = slug
-  selectedNodeId.value = activePage.value?.root.id || ''
-  leftMode.value = 'layers'
 }
 
 function dragPalette(event: DragEvent, kind: 'layout' | 'component', value: string) {
@@ -572,18 +730,64 @@ function restoreLocalSnapshot() {
 }
 
 watch(config, saveLocalSnapshot, { deep: true })
-watch(activePageSlug, () => {
-  selectedNodeId.value = activePage.value?.root.id || ''
-})
+watch(
+  [structureOpen, inspectorOpen, expandedKeys, zoomMode, zoom],
+  () => {
+    persistWorkspacePreferences()
+    if (zoomMode.value === 'fit') nextTick(fitCanvas)
+  },
+  { deep: true },
+)
+watch([activePageSlug, breakpoint], () => fitCanvas())
 
 onMounted(async () => {
   await nextTick()
+  designerResizeObserver = new ResizeObserver(([entry]) => {
+    const previousWidth = workspaceWidth.value
+    workspaceWidth.value = Math.round(entry.contentRect.width)
+    if (!preferencesReady) {
+      structureOpen.value = workspaceWidth.value >= 900
+      inspectorOpen.value = workspaceWidth.value >= 1200
+    } else {
+      if (previousWidth >= 1200 && workspaceWidth.value < 1200) inspectorOpen.value = false
+      if (previousWidth >= 900 && workspaceWidth.value < 900) structureOpen.value = false
+    }
+    if (zoomMode.value === 'fit') fitCanvas()
+  })
+  if (designerRoot.value) designerResizeObserver.observe(designerRoot.value)
+  stageResizeObserver = new ResizeObserver(() => {
+    if (zoomMode.value === 'fit') fitCanvas()
+  })
+  if (stageViewport.value) stageResizeObserver.observe(stageViewport.value)
+  canvasResizeObserver = new ResizeObserver(([entry]) => {
+    canvasContentHeight.value = Math.ceil(entry.contentRect.height)
+  })
+  if (canvasElement.value) canvasResizeObserver.observe(canvasElement.value)
+  window.addEventListener('keydown', handleEscape)
   await load()
+})
+
+onBeforeUnmount(() => {
+  designerResizeObserver?.disconnect()
+  stageResizeObserver?.disconnect()
+  canvasResizeObserver?.disconnect()
+  window.removeEventListener('keydown', handleEscape)
 })
 </script>
 
 <template>
-  <div class="low-code-designer" v-loading="loading">
+  <div
+    ref="designerRoot"
+    class="low-code-designer"
+    :class="{
+      'is-immersive': immersive,
+      'is-structure-closed': !structureOpen,
+      'is-inspector-closed': !inspectorOpen,
+      'is-narrow-workspace': compactStructure,
+    }"
+    data-testid="portal-designer"
+    v-loading="loading"
+  >
     <header class="low-code-toolbar">
       <div class="low-code-toolbar__identity">
         <el-select
@@ -604,25 +808,56 @@ onMounted(async () => {
         <el-tag v-if="dirty" type="warning" effect="plain">未保存</el-tag>
       </div>
 
-      <div class="low-code-toolbar__breakpoints" aria-label="响应式断点">
-        <el-segmented
-          v-model="breakpoint"
-          :options="[
-            { label: '桌面 12 列', value: 'desktop' },
-            { label: '平板 8 列', value: 'tablet' },
-            { label: '手机 4 列', value: 'mobile' },
-          ]"
-        />
+      <div class="low-code-toolbar__workspace-actions" aria-label="设计工作区">
+        <el-button
+          :type="structureOpen ? 'primary' : 'default'"
+          plain
+          :icon="Operation"
+          @click="toggleStructurePanel"
+        >
+          结构
+        </el-button>
+        <el-button
+          :type="inspectorOpen ? 'primary' : 'default'"
+          plain
+          :icon="Setting"
+          @click="toggleInspectorPanel"
+        >
+          属性
+        </el-button>
+        <el-button
+          :type="immersive ? 'primary' : 'default'"
+          plain
+          :icon="FullScreen"
+          @click="toggleImmersive"
+        >
+          {{ immersive ? '退出沉浸' : '沉浸设计' }}
+        </el-button>
       </div>
 
       <div class="low-code-toolbar__actions">
-        <el-button :disabled="!history.length" @click="undo">撤销</el-button>
-        <el-button :disabled="!future.length" @click="redo">重做</el-button>
-        <el-button v-if="auth.hasAnyPermission(['portal-code:read'])" @click="codeDrawerOpen = true">
-          代码组件
-        </el-button>
+        <div class="low-code-toolbar__secondary-actions">
+          <el-button :disabled="!history.length" @click="undo">撤销</el-button>
+          <el-button :disabled="!future.length" @click="redo">重做</el-button>
+          <el-button v-if="auth.hasAnyPermission(['portal-code:read'])" @click="codeDrawerOpen = true">
+            代码组件
+          </el-button>
+          <el-button :disabled="!canEdit" @click="validateDraft">校验</el-button>
+        </div>
+        <el-dropdown class="low-code-toolbar__more" trigger="click" @command="handleMoreCommand">
+          <el-button aria-label="更多设计操作" :icon="MoreFilled">更多</el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="undo" :disabled="!history.length">撤销</el-dropdown-item>
+              <el-dropdown-item command="redo" :disabled="!future.length">重做</el-dropdown-item>
+              <el-dropdown-item v-if="auth.hasAnyPermission(['portal-code:read'])" command="code">
+                代码组件
+              </el-dropdown-item>
+              <el-dropdown-item command="validate" :disabled="!canEdit">校验</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button :loading="saving" :disabled="!canEdit" type="primary" @click="save"> 保存草稿 </el-button>
-        <el-button :disabled="!canEdit" @click="validateDraft">校验</el-button>
         <el-button
           v-if="activeVersion?.status === 'draft'"
           :disabled="!canEdit"
@@ -660,50 +895,58 @@ onMounted(async () => {
     </header>
 
     <section class="low-code-workspace">
-      <aside class="low-code-left">
+      <button
+        v-if="compactStructure && structureOpen"
+        class="low-code-drawer-backdrop"
+        aria-label="关闭结构面板"
+        @click="structureOpen = false"
+      ></button>
+      <button
+        v-if="compactInspector && inspectorOpen"
+        class="low-code-drawer-backdrop is-inspector"
+        aria-label="关闭属性面板"
+        @click="inspectorOpen = false"
+      ></button>
+      <aside class="low-code-left" data-testid="structure-panel">
+        <header class="low-code-side-panel__header">
+          <strong>页面结构</strong>
+          <el-button v-if="compactStructure" link @click="structureOpen = false">关闭</el-button>
+        </header>
         <el-segmented
           v-model="leftMode"
           :options="[
-            { label: '页面', value: 'pages' },
-            { label: '图层', value: 'layers' },
+            { label: '结构', value: 'structure' },
             { label: '组件', value: 'components' },
             { label: '复用', value: 'symbols' },
           ]"
         />
 
-        <div v-if="leftMode === 'pages'" class="low-code-panel-list">
-          <p class="low-code-panel-caption">全局壳层</p>
-          <button :class="{ 'is-active': activePageSlug === '$header' }" @click="selectPage('$header')">
-            <span>全局页头</span>
-            <small>shell</small>
-          </button>
-          <button :class="{ 'is-active': activePageSlug === '$footer' }" @click="selectPage('$footer')">
-            <span>全局页脚</span>
-            <small>shell</small>
-          </button>
-          <p class="low-code-panel-caption">站点页面</p>
-          <button
-            v-for="page in config?.pages"
-            :key="page.slug"
-            :class="{ 'is-active': activePageSlug === page.slug }"
-            @click="selectPage(page.slug)"
+        <div v-if="leftMode === 'structure'" class="low-code-structure">
+          <el-tree
+            :key="selectedSiteKey"
+            :data="structureData"
+            node-key="key"
+            :props="{ children: 'children', label: 'label' }"
+            :current-node-key="selectedStructureKey"
+            :default-expanded-keys="expandedKeys"
+            :expand-on-click-node="true"
+            highlight-current
+            @node-click="selectStructure"
+            @node-expand="rememberExpanded"
+            @node-collapse="rememberCollapsed"
           >
-            <span>{{ page.title || page.slug }}</span>
-            <small>{{ page.kind }}</small>
-          </button>
-        </div>
-
-        <div v-else-if="leftMode === 'layers'" class="low-code-layer-list">
-          <button
-            v-for="item in layerNodes"
-            :key="item.node.id"
-            :class="{ 'is-active': selectedNodeId === item.node.id }"
-            :style="{ paddingLeft: `${12 + (item.depth - 1) * 14}px` }"
-            @click="selectedNodeId = item.node.id"
-          >
-            <span>{{ item.node.name || item.node.id }}</span>
-            <small>{{ item.node.type }}</small>
-          </button>
+            <template #default="{ data }">
+              <div class="low-code-structure__row" :class="`is-${(data as DesignerStructureNode).kind}`">
+                <span class="low-code-structure__label">{{ (data as DesignerStructureNode).label }}</span>
+                <span v-if="(data as DesignerStructureNode).nodeType" class="low-code-structure__type">
+                  {{ (data as DesignerStructureNode).nodeType }}
+                </span>
+                <span v-if="(data as DesignerStructureNode).locked" class="low-code-structure__lock">
+                  锁定
+                </span>
+              </div>
+            </template>
+          </el-tree>
         </div>
 
         <div v-else-if="leftMode === 'components'" class="low-code-palette">
@@ -766,9 +1009,18 @@ onMounted(async () => {
         </div>
       </aside>
 
-      <main class="low-code-stage">
+      <main class="low-code-stage" data-testid="designer-stage">
         <div class="low-code-stage__meta">
           <span>{{ activePage?.title }} · {{ nodeCount }} 个节点</span>
+          <el-segmented
+            v-model="breakpoint"
+            aria-label="响应式断点"
+            :options="[
+              { label: '桌面 12 列', value: 'desktop' },
+              { label: '平板 8 列', value: 'tablet' },
+              { label: '手机 4 列', value: 'mobile' },
+            ]"
+          />
           <div>
             <el-button v-if="livePagePath" link type="primary" @click="openLivePage">
               打开真实页面
@@ -776,31 +1028,35 @@ onMounted(async () => {
             <span>{{ canvasWidth }}px · {{ zoom }}%</span>
           </div>
         </div>
-        <div class="low-code-stage__viewport">
-          <div
-            class="low-code-stage__canvas"
-            :class="`is-${breakpoint}`"
-            :style="{ width: `${canvasWidth}px`, transform: `scale(${zoom / 100})` }"
-          >
-            <DesignerCanvasNode
-              v-if="activePage"
-              :node="activePage.root"
-              :selected-id="selectedNodeId"
-              :breakpoint="breakpoint"
-              @select="selectedNodeId = $event"
-              @drop="handleDrop"
-              @reorder="handleReorder"
-            />
+        <div ref="stageViewport" class="low-code-stage__viewport" data-testid="canvas-viewport">
+          <div class="low-code-stage__canvas-frame" :style="canvasFrameStyle">
+            <div
+              ref="canvasElement"
+              class="low-code-stage__canvas"
+              :class="`is-${breakpoint}`"
+              :style="canvasStyle"
+            >
+              <DesignerCanvasNode
+                v-if="activePage"
+                :node="activePage.root"
+                :selected-id="selectedNodeId"
+                :breakpoint="breakpoint"
+                @select="selectedNodeId = $event"
+                @drop="handleDrop"
+                @reorder="handleReorder"
+              />
+            </div>
           </div>
         </div>
       </main>
 
-      <aside class="low-code-inspector">
-        <header>
+      <aside class="low-code-inspector" data-testid="inspector-panel">
+        <header class="low-code-inspector__header">
           <div>
             <strong>{{ selectedNode?.name || '未选择节点' }}</strong>
-            <span>{{ selectedNode?.id || '从画布或图层选择' }}</span>
+            <span>{{ selectedNode?.id || '从画布或结构树选择' }}</span>
           </div>
+          <el-button v-if="compactInspector" link @click="inspectorOpen = false">关闭</el-button>
           <div v-if="selectedNode" class="low-code-inspector__node-actions">
             <el-button text @click="moveSelected(-1)">上移</el-button>
             <el-button text @click="moveSelected(1)">下移</el-button>
@@ -977,7 +1233,9 @@ onMounted(async () => {
     <footer class="low-code-statusbar">
       <div class="low-code-statusbar__zoom">
         <span>缩放</span>
-        <el-slider v-model="zoom" :min="40" :max="110" :show-tooltip="false" />
+        <el-slider v-model="zoom" :min="40" :max="110" :show-tooltip="false" @input="setManualZoom" />
+        <button type="button" @click="fitCanvas">适应</button>
+        <small>{{ zoomMode === 'fit' ? '自动' : '手动' }}</small>
       </div>
       <span class="low-code-statusbar__path">{{ breadcrumbs.join(' / ') }}</span>
       <button :class="{ 'has-issues': issues.length }" @click="issues = []">
@@ -991,6 +1249,9 @@ onMounted(async () => {
 <style scoped>
 .low-code-designer {
   --designer-border: #d9e5e1;
+  position: relative;
+  container-name: designer;
+  container-type: inline-size;
   display: grid;
   grid-template-rows: 58px minmax(0, 1fr) 34px;
   height: calc(100vh - 40px);
@@ -1002,10 +1263,29 @@ onMounted(async () => {
   border-radius: 12px;
 }
 
+.low-code-designer.is-immersive {
+  position: fixed;
+  z-index: 100;
+  inset: 8px;
+  height: calc(100dvh - 16px);
+  min-height: 0;
+  border-radius: 10px;
+  box-shadow: 0 20px 80px rgb(4 38 32 / 0.3);
+}
+
+.low-code-designer.is-narrow-workspace {
+  grid-template-rows: 96px minmax(0, 1fr) 34px;
+  height: calc(100dvh - 24px);
+}
+
+.low-code-designer.is-narrow-workspace.is-immersive {
+  height: calc(100dvh - 16px);
+}
+
 .low-code-toolbar {
   z-index: 5;
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto minmax(520px, 1fr);
+  grid-template-columns: minmax(240px, 1fr) auto minmax(460px, 1fr);
   align-items: center;
   gap: 16px;
   padding: 8px 12px;
@@ -1015,6 +1295,8 @@ onMounted(async () => {
 
 .low-code-toolbar__identity,
 .low-code-toolbar__actions,
+.low-code-toolbar__workspace-actions,
+.low-code-toolbar__secondary-actions,
 .low-code-inspector__node-actions {
   display: flex;
   align-items: center;
@@ -1029,8 +1311,6 @@ onMounted(async () => {
 .low-code-toolbar__identity span,
 .low-code-inspector header span,
 .low-code-stage__meta,
-.low-code-panel-list small,
-.low-code-layer-list small,
 .low-code-symbols small {
   color: #71837f;
   font-size: 11px;
@@ -1044,18 +1324,42 @@ onMounted(async () => {
   justify-content: flex-end;
 }
 
+.low-code-toolbar__more {
+  display: none;
+}
+
 .low-code-workspace {
+  position: relative;
   display: grid;
-  grid-template-columns: 260px minmax(540px, 1fr) 320px;
+  grid-template-columns: 240px minmax(0, 1fr) 320px;
   min-height: 0;
+  overflow: hidden;
+  transition: grid-template-columns 160ms ease;
+}
+
+.is-structure-closed .low-code-workspace {
+  grid-template-columns: 0 minmax(0, 1fr) 320px;
+}
+
+.is-inspector-closed .low-code-workspace {
+  grid-template-columns: 240px minmax(0, 1fr) 0;
+}
+
+.is-structure-closed.is-inspector-closed .low-code-workspace {
+  grid-template-columns: 0 minmax(0, 1fr) 0;
 }
 
 .low-code-left,
 .low-code-inspector {
+  position: relative;
+  z-index: 2;
   min-height: 0;
   padding: 12px;
   overflow: auto;
   background: #fff;
+  transition:
+    transform 160ms ease,
+    opacity 160ms ease;
 }
 
 .low-code-left {
@@ -1066,24 +1370,98 @@ onMounted(async () => {
   border-left: 1px solid var(--designer-border);
 }
 
-.low-code-panel-list,
-.low-code-layer-list,
+.is-structure-closed .low-code-left,
+.is-inspector-closed .low-code-inspector {
+  visibility: hidden;
+  padding-inline: 0;
+  opacity: 0;
+}
+
+.low-code-side-panel__header {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.low-code-left > :deep(.el-segmented) {
+  width: 100%;
+}
+
+.low-code-left > :deep(.el-segmented__group) {
+  width: 100%;
+}
+
+.low-code-left > :deep(.el-segmented__item) {
+  flex: 1;
+}
+
+.low-code-structure,
 .low-code-symbols {
-  display: grid;
-  gap: 6px;
   margin-top: 12px;
 }
 
-.low-code-panel-caption {
-  margin: 8px 4px 2px;
-  color: #78908b;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+.low-code-structure :deep(.el-tree) {
+  --el-tree-node-hover-bg-color: #edf8f4;
+  color: inherit;
+  background: transparent;
 }
 
-.low-code-panel-list button,
-.low-code-layer-list button,
+.low-code-structure :deep(.el-tree-node__content) {
+  height: 34px;
+  margin: 1px 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+}
+
+.low-code-structure :deep(.el-tree-node.is-current > .el-tree-node__content) {
+  background: #e5f5ef;
+  border-color: #9dcebf;
+}
+
+.low-code-structure__row {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 6px;
+}
+
+.low-code-structure__row.is-group {
+  color: #41635b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.low-code-structure__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.low-code-structure__type,
+.low-code-structure__lock {
+  flex: 0 0 auto;
+  color: #788c87;
+  font-size: 9px;
+}
+
+.low-code-structure__lock {
+  padding: 1px 4px;
+  color: #875a00;
+  background: #fff4d6;
+  border-radius: 4px;
+}
+
+.low-code-symbols {
+  display: grid;
+  gap: 6px;
+}
+
 .low-code-symbols button {
   display: flex;
   justify-content: space-between;
@@ -1096,11 +1474,7 @@ onMounted(async () => {
   border-radius: 8px;
 }
 
-.low-code-panel-list :where(button:hover),
-.low-code-layer-list :where(button:hover),
-.low-code-symbols :where(button:hover),
-.low-code-panel-list :where(button.is-active),
-.low-code-layer-list :where(button.is-active) {
+.low-code-symbols :where(button:hover) {
   background: #edf8f4;
   border-color: #a6d5c8;
 }
@@ -1141,7 +1515,7 @@ onMounted(async () => {
 
 .low-code-stage {
   display: grid;
-  grid-template-rows: 32px minmax(0, 1fr);
+  grid-template-rows: 42px minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   background-color: #e9efec;
@@ -1150,9 +1524,10 @@ onMounted(async () => {
 }
 
 .low-code-stage__meta {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(120px, 1fr);
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
   padding: 0 12px;
   background: rgb(255 255 255 / 0.88);
   border-bottom: 1px solid var(--designer-border);
@@ -1161,7 +1536,13 @@ onMounted(async () => {
 .low-code-stage__meta > div {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
+}
+
+.low-code-stage__meta > :deep(.el-segmented) {
+  --el-segmented-item-selected-bg-color: #dff2ec;
+  --el-segmented-item-selected-color: #096c59;
 }
 
 .low-code-stage__meta :deep(.el-button) {
@@ -1175,16 +1556,26 @@ onMounted(async () => {
   overflow: auto;
 }
 
-.low-code-stage__canvas {
-  min-height: 720px;
+.low-code-stage__canvas-frame {
+  position: relative;
   margin: 0 auto;
+  transition:
+    width 160ms ease,
+    height 160ms ease;
+}
+
+.low-code-stage__canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
   padding: 24px;
   overflow: hidden;
   background: #fffdf8;
   border: 1px solid #cbd8d3;
   border-radius: 4px;
   box-shadow: 0 10px 32px rgb(18 55 48 / 0.12);
-  transform-origin: top center;
+  transform-origin: top left;
+  transition: transform 160ms ease;
 }
 
 .low-code-stage__canvas.is-tablet {
@@ -1196,18 +1587,20 @@ onMounted(async () => {
   padding: 16px;
 }
 
-.low-code-inspector header {
+.low-code-inspector__header {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--designer-border);
 }
 
-.low-code-inspector header > div:first-child {
+.low-code-inspector__header > div:first-child {
   display: grid;
 }
 
 .low-code-inspector__node-actions {
+  grid-column: 1 / -1;
   flex-wrap: wrap;
 }
 
@@ -1231,7 +1624,7 @@ onMounted(async () => {
 
 .low-code-statusbar {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr) auto;
+  grid-template-columns: 260px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 0 12px;
@@ -1242,9 +1635,13 @@ onMounted(async () => {
 
 .low-code-statusbar__zoom {
   display: grid;
-  grid-template-columns: 36px 1fr;
+  grid-template-columns: 36px minmax(80px, 1fr) auto auto;
   align-items: center;
   gap: 8px;
+}
+
+.low-code-statusbar__zoom small {
+  color: #71837f;
 }
 
 .low-code-statusbar__path {
@@ -1323,37 +1720,149 @@ onMounted(async () => {
   background: transparent;
 }
 
-@media (width < 1440px) {
+@container designer (max-width: 1199px) {
   .low-code-toolbar {
-    grid-template-columns: minmax(220px, 1fr) auto;
+    grid-template-columns: minmax(220px, 1fr) auto auto;
+    gap: 10px;
   }
 
-  .low-code-toolbar__breakpoints {
+  .low-code-toolbar__secondary-actions {
     display: none;
   }
 
-  .low-code-workspace {
-    grid-template-columns: 220px minmax(480px, 1fr) 300px;
-  }
-}
-
-@media (width < 1100px) {
-  .low-code-designer {
-    height: calc(100vh - 24px);
+  .low-code-toolbar__more {
+    display: inline-flex;
   }
 
   .low-code-workspace {
-    grid-template-columns: 190px minmax(480px, 1fr);
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .is-inspector-closed .low-code-workspace {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .is-structure-closed .low-code-workspace,
+  .is-structure-closed.is-inspector-closed .low-code-workspace {
+    grid-template-columns: 0 minmax(0, 1fr);
   }
 
   .low-code-inspector {
     position: absolute;
-    z-index: 10;
-    top: 58px;
+    z-index: 16;
+    top: 0;
     right: 0;
-    bottom: 34px;
+    bottom: 0;
     width: 320px;
+    visibility: visible;
+    padding: 12px;
+    opacity: 1;
     box-shadow: -8px 0 24px rgb(14 59 51 / 0.12);
+    transform: translateX(0);
+  }
+
+  .is-inspector-closed .low-code-inspector {
+    visibility: hidden;
+    padding: 12px;
+    opacity: 0;
+    transform: translateX(102%);
+  }
+
+  .low-code-drawer-backdrop {
+    position: absolute;
+    z-index: 14;
+    inset: 0;
+    display: block;
+    padding: 0;
+    background: rgb(13 49 42 / 0.18);
+    border: 0;
+  }
+}
+
+@container designer (max-width: 899px) {
+  .low-code-toolbar {
+    grid-template-columns: minmax(160px, 1fr) auto;
+    grid-template-rows: 40px 40px;
+    gap: 0 8px;
+  }
+
+  .low-code-toolbar__identity > div {
+    display: none;
+  }
+
+  .low-code-site-select {
+    width: min(150px, 32vw);
+  }
+
+  .low-code-toolbar__workspace-actions {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .low-code-toolbar__actions {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    flex-wrap: wrap;
+    max-width: 260px;
+  }
+
+  .low-code-workspace,
+  .is-structure-closed .low-code-workspace,
+  .is-inspector-closed .low-code-workspace,
+  .is-structure-closed.is-inspector-closed .low-code-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .low-code-left {
+    position: absolute;
+    z-index: 16;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(300px, 86%);
+    visibility: visible;
+    padding: 12px;
+    opacity: 1;
+    box-shadow: 8px 0 24px rgb(14 59 51 / 0.12);
+    transform: translateX(0);
+  }
+
+  .is-structure-closed .low-code-left {
+    visibility: hidden;
+    padding: 12px;
+    opacity: 0;
+    transform: translateX(-102%);
+  }
+
+  .low-code-side-panel__header {
+    display: flex;
+  }
+
+  .low-code-stage__meta {
+    grid-template-columns: minmax(90px, 1fr) auto minmax(90px, 1fr);
+    gap: 8px;
+  }
+
+  .low-code-stage__viewport {
+    padding: 18px;
+  }
+
+  .low-code-statusbar {
+    grid-template-columns: minmax(210px, 1fr) auto;
+  }
+
+  .low-code-statusbar__path {
+    display: none;
+  }
+}
+
+@container designer (max-width: 620px) {
+  .low-code-stage__meta {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .low-code-stage__meta > span:first-child {
+    display: none;
   }
 }
 </style>
