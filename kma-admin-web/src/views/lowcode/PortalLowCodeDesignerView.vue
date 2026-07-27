@@ -38,8 +38,13 @@ import {
 import { componentPropertyFields } from '../../cms/v3/componentPropertySchema'
 import { migratePortalConfigV2ToV3 } from '../../cms/v3/migrateV2'
 import {
+  PREVIEW_WIDTH_MAX,
+  PREVIEW_WIDTH_MIN,
+  PREVIEW_WIDTH_PRESETS,
   buildDesignerStructure,
   fitCanvasZoom,
+  normalizePreviewWidth,
+  previewBreakpoint,
   structureSelectionKey,
   type DesignerStructureNode,
 } from '../../cms/v3/designerWorkspace'
@@ -54,12 +59,13 @@ type ZoomMode = 'fit' | 'manual'
 type MoreCommand = 'undo' | 'redo' | 'code' | 'validate'
 
 interface WorkspacePreferences {
-  version: 1
+  version: 2
   structureOpen: boolean
   inspectorOpen: boolean
   expandedKeys: string[]
   zoomMode: ZoomMode
   zoom: number
+  previewWidth: number
 }
 
 const auth = useAuthStore()
@@ -72,7 +78,11 @@ const activePageSlug = ref('home')
 const selectedNodeId = ref('')
 const leftMode = ref<LeftMode>('structure')
 const inspectorMode = ref<InspectorMode>('layout')
-const breakpoint = ref<PortalBreakpoint>('desktop')
+const previewWidth = ref(PREVIEW_WIDTH_PRESETS.desktop)
+const breakpoint = computed<PortalBreakpoint>({
+  get: () => previewBreakpoint(previewWidth.value),
+  set: (value) => setPreviewWidth(PREVIEW_WIDTH_PRESETS[value]),
+})
 const loading = ref(false)
 const saving = ref(false)
 const dirty = ref(false)
@@ -140,14 +150,13 @@ const nodeCount = computed(() => {
   if (activePage.value) walkNodes(activePage.value.root, () => (count += 1))
   return count
 })
-const canvasWidth = computed(() =>
-  breakpoint.value === 'desktop' ? 1440 : breakpoint.value === 'tablet' ? 1024 : 390,
-)
+const canvasWidth = computed(() => previewWidth.value)
 const minimumCanvasHeight = computed(() =>
   breakpoint.value === 'desktop' ? 720 : breakpoint.value === 'tablet' ? 768 : 844,
 )
 const snapshotKey = computed(() => `kma-low-code-v3:${selectedSiteKey.value}`)
-const workspacePreferencesKey = computed(() => `kma-low-code-workspace:v1:${selectedSiteKey.value}`)
+const workspacePreferencesKey = computed(() => `kma-low-code-workspace:v2:${selectedSiteKey.value}`)
+const legacyWorkspacePreferencesKey = computed(() => `kma-low-code-workspace:v1:${selectedSiteKey.value}`)
 const breadcrumbs = computed(() => {
   const result: string[] = []
   let current = selectedNode.value
@@ -206,24 +215,26 @@ function openLivePage() {
 
 function defaultPreferences(): WorkspacePreferences {
   return {
-    version: 1,
+    version: 2,
     structureOpen: workspaceWidth.value >= 900,
     inspectorOpen: workspaceWidth.value >= 1200,
     expandedKeys: ['group:shell', 'group:pages', `page:${activePageSlug.value}`],
     zoomMode: 'fit',
     zoom: 90,
+    previewWidth: PREVIEW_WIDTH_PRESETS.desktop,
   }
 }
 
 function persistWorkspacePreferences() {
   if (!preferencesReady || !selectedSiteKey.value) return
   const value: WorkspacePreferences = {
-    version: 1,
+    version: 2,
     structureOpen: structureOpen.value,
     inspectorOpen: inspectorOpen.value,
     expandedKeys: expandedKeys.value,
     zoomMode: zoomMode.value,
     zoom: zoom.value,
+    previewWidth: previewWidth.value,
   }
   localStorage.setItem(workspacePreferencesKey.value, JSON.stringify(value))
 }
@@ -233,7 +244,9 @@ function restoreWorkspacePreferences() {
   const defaults = defaultPreferences()
   try {
     const stored = JSON.parse(
-      localStorage.getItem(workspacePreferencesKey.value) || 'null',
+      localStorage.getItem(workspacePreferencesKey.value) ||
+        localStorage.getItem(legacyWorkspacePreferencesKey.value) ||
+        'null',
     ) as Partial<WorkspacePreferences> | null
     structureOpen.value =
       typeof stored?.structureOpen === 'boolean' ? stored.structureOpen : defaults.structureOpen
@@ -245,6 +258,7 @@ function restoreWorkspacePreferences() {
     zoomMode.value = stored?.zoomMode === 'manual' ? 'manual' : 'fit'
     zoom.value =
       typeof stored?.zoom === 'number' ? Math.max(40, Math.min(110, Math.round(stored.zoom))) : defaults.zoom
+    previewWidth.value = normalizePreviewWidth(stored?.previewWidth, defaults.previewWidth)
   } catch {
     localStorage.removeItem(workspacePreferencesKey.value)
     structureOpen.value = defaults.structureOpen
@@ -252,8 +266,13 @@ function restoreWorkspacePreferences() {
     expandedKeys.value = defaults.expandedKeys
     zoomMode.value = defaults.zoomMode
     zoom.value = defaults.zoom
+    previewWidth.value = defaults.previewWidth
   }
   preferencesReady = true
+}
+
+function setPreviewWidth(value: number) {
+  previewWidth.value = normalizePreviewWidth(value)
 }
 
 async function fitCanvas() {
@@ -863,7 +882,7 @@ function restoreLocalSnapshot() {
 
 watch(config, saveLocalSnapshot, { deep: true })
 watch(
-  [structureOpen, inspectorOpen, expandedKeys, zoomMode, zoom],
+  [structureOpen, inspectorOpen, expandedKeys, zoomMode, zoom, previewWidth],
   () => {
     persistWorkspacePreferences()
     if (zoomMode.value === 'fit') nextTick(fitCanvas)
@@ -1191,6 +1210,7 @@ onBeforeUnmount(() => {
                 :node="activePage.root"
                 :selected-id="selectedNodeId"
                 :breakpoint="breakpoint"
+                :preview-width="previewWidth"
                 @select="selectedNodeId = $event"
                 @drop="handleDrop"
               />
@@ -1451,6 +1471,18 @@ onBeforeUnmount(() => {
     </section>
 
     <footer class="low-code-statusbar">
+      <div class="low-code-statusbar__width">
+        <span>画布</span>
+        <el-slider
+          v-model="previewWidth"
+          aria-label="预览宽度"
+          :min="PREVIEW_WIDTH_MIN"
+          :max="PREVIEW_WIDTH_MAX"
+          :step="10"
+          :show-tooltip="false"
+        />
+        <small>{{ previewWidth }}px</small>
+      </div>
       <div class="low-code-statusbar__zoom">
         <span>缩放</span>
         <el-slider v-model="zoom" :min="40" :max="110" :show-tooltip="false" @input="setManualZoom" />
@@ -1484,7 +1516,7 @@ onBeforeUnmount(() => {
   container-name: designer;
   container-type: inline-size;
   display: grid;
-  grid-template-rows: 58px minmax(0, 1fr) 34px;
+  grid-template-rows: 58px minmax(0, 1fr) 42px;
   height: calc(100vh - 40px);
   min-height: 680px;
   overflow: hidden;
@@ -1505,7 +1537,7 @@ onBeforeUnmount(() => {
 }
 
 .low-code-designer.is-narrow-workspace {
-  grid-template-rows: 96px minmax(0, 1fr) 34px;
+  grid-template-rows: 96px minmax(0, 1fr) 42px;
   height: calc(100dvh - 24px);
 }
 
@@ -1855,7 +1887,7 @@ onBeforeUnmount(() => {
 
 .low-code-statusbar {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) auto;
+  grid-template-columns: 250px 260px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 0 12px;
@@ -1864,13 +1896,22 @@ onBeforeUnmount(() => {
   border-top: 1px solid var(--designer-border);
 }
 
+.low-code-statusbar__width,
 .low-code-statusbar__zoom {
   display: grid;
-  grid-template-columns: 36px minmax(80px, 1fr) auto auto;
   align-items: center;
   gap: 8px;
 }
 
+.low-code-statusbar__width {
+  grid-template-columns: 36px minmax(100px, 1fr) 52px;
+}
+
+.low-code-statusbar__zoom {
+  grid-template-columns: 36px minmax(80px, 1fr) auto auto;
+}
+
+.low-code-statusbar__width small,
 .low-code-statusbar__zoom small {
   color: #71837f;
 }
@@ -2079,7 +2120,7 @@ onBeforeUnmount(() => {
   }
 
   .low-code-statusbar {
-    grid-template-columns: minmax(210px, 1fr) auto;
+    grid-template-columns: minmax(180px, 1fr) minmax(210px, 1fr) auto;
   }
 
   .low-code-statusbar__path {

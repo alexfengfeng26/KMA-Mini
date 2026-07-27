@@ -48,7 +48,6 @@ function systemPage(kind: LowCodePage['kind'], title: string, component: PortalC
       type: 'section',
       name: `${title}页面`,
       locked: true,
-      layout: { maxWidth: '1440px' },
       children: [
         {
           id: `${kind}-core`,
@@ -123,7 +122,6 @@ function migratePage(page: CmsPageConfigV2): LowCodePage {
       type: 'section',
       name: '页面根节点',
       locked: true,
-      layout: { maxWidth: '1440px' },
       children,
     },
   }

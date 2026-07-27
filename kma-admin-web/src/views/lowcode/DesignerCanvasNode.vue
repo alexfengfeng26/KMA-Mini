@@ -4,6 +4,7 @@ import type { LayoutNode, PortalBreakpoint, PortalCoreComponent } from '../../cm
 import { blockDefinition } from '../../cms/blockDefinitions'
 import { responsiveValue } from '../../cms/v3/contract'
 import type { DesignerDropPosition } from '../../cms/v3/designerTree'
+import { topicDirectoryColumns } from '../../cms/v3/designerWorkspace'
 
 const coreComponentMeta: Record<PortalCoreComponent, { title: string; description: string; marker: string }> =
   {
@@ -53,6 +54,7 @@ const props = defineProps<{
   node: LayoutNode
   selectedId?: string
   breakpoint: PortalBreakpoint
+  previewWidth: number
 }>()
 
 const emit = defineEmits<{
@@ -62,6 +64,12 @@ const emit = defineEmits<{
 
 const children = computed(() => ('children' in props.node ? props.node.children : []))
 const acceptsChildren = computed(() => 'children' in props.node)
+const topicColumns = computed(() => topicDirectoryColumns(props.previewWidth))
+const topicSamples = [
+  { index: '01', title: '重点专题学习', description: '聚合权威文件与学习材料' },
+  { index: '02', title: '基层实践案例', description: '沉淀可复用的实践经验' },
+  { index: '03', title: '政策解读专栏', description: '追踪重点政策与最新动态' },
+]
 const componentMeta = computed(() => {
   if (props.node.type !== 'component') return undefined
   const core = coreComponentMeta[props.node.component as PortalCoreComponent]
@@ -171,6 +179,7 @@ function forwardDrop(targetId: string, position: DesignerDropPosition, payload: 
         :node="child"
         :selected-id="selectedId"
         :breakpoint="breakpoint"
+        :preview-width="previewWidth"
         @select="emit('select', $event)"
         @drop="forwardDrop"
       />
@@ -179,6 +188,20 @@ function forwardDrop(targetId: string, position: DesignerDropPosition, payload: 
     <div v-else class="designer-node__preview" :class="{ 'has-component': node.type === 'component' }">
       <template v-if="node.type === 'sandbox'">独立来源 iframe · 受控 Portal SDK</template>
       <template v-else-if="node.type === 'symbol-ref'">共享区块实例</template>
+      <div
+        v-else-if="node.type === 'component' && node.component === 'topic-directory'"
+        class="designer-topic-preview"
+        :class="`columns-${topicColumns}`"
+        :data-columns="topicColumns"
+        data-testid="topic-directory-preview"
+      >
+        <article v-for="topic in topicSamples" :key="topic.index">
+          <span>{{ topic.index }}</span>
+          <strong>{{ topic.title }}</strong>
+          <p>{{ topic.description }}</p>
+          <small>浏览专题资料 →</small>
+        </article>
+      </div>
       <div
         v-else-if="node.type === 'component' && componentMeta"
         class="designer-component-preview"
@@ -306,5 +329,56 @@ function forwardDrop(targetId: string, position: DesignerDropPosition, payload: 
   color: #16816a;
   font-size: 10px;
   font-weight: 700;
+}
+
+.designer-topic-preview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.designer-topic-preview.columns-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.designer-topic-preview.columns-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.designer-topic-preview article {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  min-height: 132px;
+  padding: 16px;
+  text-align: left;
+  background: linear-gradient(145deg, #fff, #edf7f3);
+  border: 1px solid #c9ded7;
+  border-radius: 12px;
+}
+
+.designer-topic-preview span,
+.designer-topic-preview small {
+  color: #08735e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.designer-topic-preview strong,
+.designer-topic-preview p {
+  overflow-wrap: anywhere;
+}
+
+.designer-topic-preview strong {
+  color: #173f36;
+  font-size: 14px;
+}
+
+.designer-topic-preview p {
+  margin: 0;
+  color: #526b65;
+  font-size: 11px;
+  line-height: 1.5;
 }
 </style>

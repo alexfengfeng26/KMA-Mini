@@ -59,6 +59,8 @@ describe('CMS V2 to low-code V3 migration', () => {
       component: 'content-results',
       locked: true,
     })
+    expect(migrated.pages.home.root.layout?.maxWidth).toBeUndefined()
+    expect(migrated.pages.library.root.layout?.maxWidth).toBeUndefined()
     expect(migrated.packages).toContainEqual({
       packageId: 'portal-showcase',
       version: '1.0.0',

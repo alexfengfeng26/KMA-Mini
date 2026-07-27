@@ -3,8 +3,11 @@ import type { PortalSiteConfigV3 } from '../siteConfig'
 import {
   buildDesignerStructure,
   fitCanvasZoom,
+  normalizePreviewWidth,
   orderedPageSlugs,
+  previewBreakpoint,
   structureSelectionKey,
+  topicDirectoryColumns,
 } from './designerWorkspace'
 
 function config(): PortalSiteConfigV3 {
@@ -92,5 +95,21 @@ describe('low-code designer workspace', () => {
     expect(fitCanvasZoom(200, 1440)).toBe(40)
     expect(fitCanvasZoom(1800, 390)).toBe(110)
     expect(fitCanvasZoom(0, 1440)).toBe(40)
+  })
+
+  it('normalizes continuous preview widths and derives breakpoints', () => {
+    expect(normalizePreviewWidth(240)).toBe(320)
+    expect(normalizePreviewWidth(2048)).toBe(1920)
+    expect(normalizePreviewWidth(undefined)).toBe(1440)
+    expect(previewBreakpoint(639)).toBe('mobile')
+    expect(previewBreakpoint(640)).toBe('tablet')
+    expect(previewBreakpoint(1199)).toBe('tablet')
+    expect(previewBreakpoint(1200)).toBe('desktop')
+  })
+
+  it('maps topic directory previews to three, two and one columns', () => {
+    expect(topicDirectoryColumns(1440)).toBe(3)
+    expect(topicDirectoryColumns(1024)).toBe(2)
+    expect(topicDirectoryColumns(390)).toBe(1)
   })
 })

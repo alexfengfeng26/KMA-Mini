@@ -4,6 +4,7 @@
 
 .low-code-node {
   box-sizing: border-box;
+  width: 100%;
   min-width: 0;
   order: var(--lc-order-desktop);
   grid-column: span min(var(--lc-span-desktop), 12);

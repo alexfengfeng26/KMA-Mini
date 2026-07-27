@@ -215,7 +215,10 @@ async function mockExperience(page: Page, versionOverride: Partial<MockPortalVer
               shell: {
                 header: { id: 'header', type: 'section', children: [] },
                 footer: { id: 'footer', type: 'section', children: [] },
-                navigation: [{ id: 'home', label: '首页', target: 'home' }],
+                navigation: [
+                  { id: 'home', label: '首页', target: 'home' },
+                  { id: 'topics', label: '专题', target: 'topics' },
+                ],
               },
               theme: {
                 preset: 'emerald',
@@ -259,6 +262,26 @@ async function mockExperience(page: Page, versionOverride: Partial<MockPortalVer
                         type: 'component',
                         name: '资料中心组件',
                         component: 'content-results',
+                        locked: true,
+                      },
+                    ],
+                  },
+                },
+                topics: {
+                  slug: 'topics',
+                  title: '专题',
+                  kind: 'topics',
+                  root: {
+                    id: 'topics-root',
+                    type: 'section',
+                    name: '专题页面',
+                    locked: true,
+                    children: [
+                      {
+                        id: 'topics-core',
+                        type: 'component',
+                        name: '专题目录',
+                        component: 'topic-directory',
                         locked: true,
                       },
                     ],
@@ -332,6 +355,50 @@ test('门户设计中心加载站点 V3 草稿并提供响应式编辑器', asyn
   await expect(page.getByText('手动', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: '适应' }).click()
   await expect(page.getByText('自动', { exact: true })).toBeVisible()
+})
+
+test('门户设计中心支持连续预览宽度并展示专题目录响应式骨架', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 })
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'kma-low-code-workspace:v1:default',
+      JSON.stringify({
+        version: 1,
+        structureOpen: true,
+        inspectorOpen: true,
+        expandedKeys: ['group:shell', 'group:pages'],
+        zoomMode: 'manual',
+        zoom: 77,
+      }),
+    )
+  })
+  await mockExperience(page)
+  await page.goto('/console/portal-appearance')
+
+  await expect(page.getByText('1440px', { exact: true })).toBeVisible()
+  await page.getByRole('treeitem', { name: '专题 topics', exact: true }).click()
+  const topicPreview = page.getByTestId('topic-directory-preview')
+  await expect(topicPreview).toHaveAttribute('data-columns', '3')
+
+  await page.getByText('平板 8 列', { exact: true }).click()
+  await expect(page.getByText('1024px', { exact: true })).toBeVisible()
+  await expect(topicPreview).toHaveAttribute('data-columns', '2')
+
+  const widthSlider = page.getByRole('slider', { name: '预览宽度' })
+  await widthSlider.press('Home')
+  await expect(page.getByText('320px', { exact: true })).toBeVisible()
+  await expect(topicPreview).toHaveAttribute('data-columns', '1')
+
+  await page.reload()
+  await expect(page.getByText('320px', { exact: true })).toBeVisible()
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const stored = localStorage.getItem('kma-low-code-workspace:v2:default')
+        return stored ? JSON.parse(stored) : null
+      }),
+    )
+    .toMatchObject({ version: 2, previewWidth: 320 })
 })
 
 test('门户设计中心在中等宽度将属性栏改为抽屉并扩大画布', async ({ page }) => {

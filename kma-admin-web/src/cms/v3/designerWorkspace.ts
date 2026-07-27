@@ -1,4 +1,29 @@
-import type { LayoutNode, PortalSiteConfigV3 } from '../siteConfig'
+import type { LayoutNode, PortalBreakpoint, PortalSiteConfigV3 } from '../siteConfig'
+
+export const PREVIEW_WIDTH_MIN = 320
+export const PREVIEW_WIDTH_MAX = 1920
+export const PREVIEW_WIDTH_PRESETS: Record<PortalBreakpoint, number> = {
+  desktop: 1440,
+  tablet: 1024,
+  mobile: 390,
+}
+
+export function normalizePreviewWidth(value: unknown, fallback = PREVIEW_WIDTH_PRESETS.desktop) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
+  return Math.max(PREVIEW_WIDTH_MIN, Math.min(PREVIEW_WIDTH_MAX, Math.round(value)))
+}
+
+export function previewBreakpoint(width: number): PortalBreakpoint {
+  if (width < 640) return 'mobile'
+  if (width < 1200) return 'tablet'
+  return 'desktop'
+}
+
+export function topicDirectoryColumns(width: number) {
+  if (width <= 720) return 1
+  if (width <= 1100) return 2
+  return 3
+}
 
 export interface DesignerStructureNode {
   key: string

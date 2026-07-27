@@ -125,7 +125,7 @@
 }
 
 .portal-main {
-  max-width: 1480px;
+  width: 100%;
   margin: auto;
   padding: 28px var(--portal-space-8) 48px;
 }

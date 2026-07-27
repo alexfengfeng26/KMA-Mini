@@ -74,6 +74,8 @@ async function mockPortal(page: Page, management = false) {
             recent: [published],
             topics: [
               { topic_code: 'party_constitution', name: '党章专题', description: '学习党章、遵守党章。' },
+              { topic_code: 'policy', name: '政策学习', description: '跟进重点政策和权威解读。' },
+              { topic_code: 'practice', name: '基层实践', description: '沉淀基层组织实践案例。' },
             ],
             history: [],
             favorites: [],
@@ -146,6 +148,22 @@ async function mockPortal(page: Page, management = false) {
               description: '学习党章、遵守党章。',
               enabled: true,
               featured: true,
+            },
+            {
+              topic_id: 2,
+              topic_code: 'policy',
+              name: '政策学习',
+              description: '跟进重点政策和权威解读。',
+              enabled: true,
+              featured: true,
+            },
+            {
+              topic_id: 3,
+              topic_code: 'practice',
+              name: '基层实践',
+              description: '沉淀基层组织实践案例。',
+              enabled: true,
+              featured: false,
             },
           ],
         },
@@ -355,7 +373,15 @@ test('门户关键页面在桌面、平板和手机宽度均无页面级溢出',
     { width: 1024, height: 768 },
     { width: 390, height: 844 },
   ]
-  const paths = ['/p/default/home', '/p/default/library', '/p/default/content/101', '/p/default/ask']
+  const paths = [
+    '/p/default/home',
+    '/p/default/library',
+    '/p/default/content/101',
+    '/p/default/ask',
+    '/p/default/topics',
+    '/p/default/favorites',
+    '/p/default/profile',
+  ]
 
   for (const viewport of viewports) {
     await page.setViewportSize(viewport)
@@ -374,4 +400,29 @@ test('门户关键页面在桌面、平板和手机宽度均无页面级溢出',
     .getByRole('button', { name: '查权威文件' })
     .evaluate((element) => element.getBoundingClientRect().height)
   expect(mobileControlHeight).toBeGreaterThanOrEqual(40)
+})
+
+test('门户正文全宽且专题目录按容器宽度呈现三二一列', async ({ page }) => {
+  await mockPortal(page)
+  const cases = [
+    { width: 1440, height: 900, columns: 3 },
+    { width: 1024, height: 768, columns: 2 },
+    { width: 390, height: 844, columns: 1 },
+  ]
+
+  for (const item of cases) {
+    await page.setViewportSize({ width: item.width, height: item.height })
+    await page.goto('/p/default/topics')
+    const metrics = await page.locator('.portal-main').evaluate((main) => {
+      const grid = main.querySelector<HTMLElement>('.portal-topic-grid')!
+      return {
+        maxWidth: getComputedStyle(main).maxWidth,
+        columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      }
+    })
+    expect(metrics.maxWidth).toBe('none')
+    expect(metrics.columns).toBe(item.columns)
+    expect(metrics.overflow).toBeLessThanOrEqual(1)
+  }
 })
