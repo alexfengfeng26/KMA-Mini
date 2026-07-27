@@ -270,7 +270,13 @@ test('门户设计中心加载站点 V3 草稿并提供响应式编辑器', asyn
   await expect(page.getByText('资料检索结果')).toBeVisible()
   await expect(page.getByText('content-results')).toBeVisible()
   await expect(page.getByText('系统核心组件 · 真实数据在门户运行时加载')).toBeVisible()
-  await expect(page.getByRole('button', { name: '打开真实页面' })).toBeVisible()
+  const previewPromise = page.waitForEvent('popup')
+  await page.getByRole('button', { name: '打开真实页面' }).click()
+  const preview = await previewPromise
+  await expect
+    .poll(() => preview.evaluate(() => sessionStorage.getItem('kma_access_token')))
+    .toBe('frontend2-token')
+  await preview.close()
   await page.getByRole('treeitem', { name: '资料中心页面 section', exact: true }).click()
   await page.getByRole('treeitem', { name: '资料中心组件 component 锁定' }).click()
   await expect(page.getByTestId('inspector-panel')).toContainText('library-core')

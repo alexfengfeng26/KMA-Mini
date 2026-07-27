@@ -193,7 +193,14 @@ function checkpoint() {
 }
 
 function openLivePage() {
-  if (livePagePath.value) window.open(livePagePath.value, '_blank', 'noopener,noreferrer')
+  if (!livePagePath.value) return
+  const previewWindow = window.open('about:blank', '_blank')
+  if (!previewWindow) {
+    ElMessage.warning('浏览器阻止了预览窗口，请允许本站打开新窗口后重试')
+    return
+  }
+  previewWindow.opener = null
+  previewWindow.location.replace(livePagePath.value)
 }
 
 function defaultPreferences(): WorkspacePreferences {
