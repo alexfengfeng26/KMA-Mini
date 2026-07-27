@@ -31,6 +31,571 @@ Failed to instantiate [com.kma.common.security.KmaLocalAuthService]: No default 
 
 ---
 
+## [ERR-20260727-032] parallel_playwright_shared_artifacts
+
+**Logged**: 2026-07-27T17:57:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: testing
+
+### Summary
+两条 Playwright 命令并行运行并共享 `test-results`，失败用例收集 trace 时出现资源文件争抢；同时断言仍依赖旧的组合宽度文本。
+
+### Error
+```
+getByText('1440px · 77%') not found
+ENOENT ... test-results/.playwright-artifacts-0/...
+```
+
+### Context
+- 运行页全宽与专题响应式用例通过。
+- 设计器 UI 已把连续宽度作为独立状态栏控件，组合文本不是稳定契约。
+
+### Suggested Fix
+Playwright 套件串行执行；断言使用“预览宽度”滑块和独立宽度文本。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/tests/e2e/frontend-modules-cms.spec.ts
+
+### Resolution
+- **Resolved**: 2026-07-27T17:58:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已调整测试策略，后续浏览器测试不再并行共享产物目录。
+
+---
+
+## [ERR-20260727-031] repeated_portal_frame_path_assumption
+
+**Logged**: 2026-07-27T17:42:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+诊断专题页布局时再次按错误的 `components/portal` 路径读取页面框架，实际导入明确指向 `cms/v3`。
+
+### Error
+```
+Cannot find path .../components/portal/PortalSystemPageFrame.vue
+```
+
+### Context
+- 只读检查，没有修改产品代码。
+- `PortalTopicsView.vue` 的 import 已给出正确位置。
+
+### Suggested Fix
+读取同文件依赖时直接依据 import 路径解析，不再按目录语义猜测。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/cms/v3/PortalSystemPageFrame.vue
+
+### Resolution
+- **Resolved**: 2026-07-27T17:43:00+08:00
+- **Commit/PR**: not applicable
+- **Notes**: 已切换到 import 指向的精确路径。
+
+---
+
+## [ERR-20260727-030] git_grep_cached_option_order
+
+**Logged**: 2026-07-27T17:33:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: tooling
+
+### Summary
+暂存区密钥扫描时将 `git grep --cached` 放在 pattern 后，Git 拒绝该选项顺序。
+
+### Error
+```
+fatal: option '--cached' must come before non-option arguments
+```
+
+### Context
+- 没有修改文件或暂存区。
+- 工作区级扫描此前已确认密钥未落盘。
+
+### Suggested Fix
+使用 `git grep --cached -n "<pattern>"`，所有选项置于 pattern 之前。
+
+### Metadata
+- Reproducible: yes
+- Related Files: staged changes
+
+### Resolution
+- **Resolved**: 2026-07-27T17:34:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已用正确参数顺序重新执行。
+
+---
+
+## [ERR-20260727-029] portal_version_primary_key_name
+
+**Logged**: 2026-07-27T17:29:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: database
+
+### Summary
+只读核验门户发布版本时假设版本表主键为 `id`，实际列名是 `config_version_id`。
+
+### Error
+```
+字段 v.id 不存在
+```
+
+### Context
+- 查询只读且未改变数据库。
+- 通过 `information_schema.columns` 确认精确列名后重新核验成功。
+
+### Suggested Fix
+临时数据库核验 SQL 应先读取表列定义，避免按常见命名猜测。
+
+### Metadata
+- Reproducible: yes
+- Related Files: knowledge_portal_config_version
+
+### Resolution
+- **Resolved**: 2026-07-27T17:30:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已确认 default 仍为 V8 published，且没有新增草稿。
+
+---
+
+## [ERR-20260727-028] portal_ai_published_version_blocked
+
+**Logged**: 2026-07-27T17:25:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: backend
+
+### Summary
+AI 提案服务错误地要求当前版本必须是草稿，导致实际站点最新版本为 `published` 时无法生成提案。
+
+### Error
+```
+PORTAL_VERSION_NOT_DRAFT
+```
+
+### Context
+- AI 提案本身只读，不写数据库；前端在用户保存时本就会从已发布版本创建新草稿。
+- E2E mock 使用草稿版本，未覆盖真实 V8 发布态。
+
+### Suggested Fix
+提案阶段只校验版本存在和乐观锁，不限制版本状态；增加已发布版本的服务测试。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/main/java/com/kma/knowledge/service/PortalDesignService.java
+- Related Files: src/test/java/com/kma/knowledge/service/PortalDesignServiceTest.java
+
+### Resolution
+- **Resolved**: 2026-07-27T17:26:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已移除错误状态限制并将测试基线改为 published。
+
+---
+
+## [ERR-20260727-027] portal_design_client_constructor_selection
+
+**Logged**: 2026-07-27T17:20:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: backend
+
+### Summary
+DeepSeek 客户端包含生产构造器和包级测试构造器，Spring 在应用启动时无法自动选择，导致上下文装配失败。
+
+### Error
+```
+BeanInstantiationException: No default constructor found
+NoSuchMethodException: PortalDesignLlmClient.<init>()
+```
+
+### Context
+- 单元测试和 Maven 全量测试均通过，但测试集未启动覆盖该组件的完整应用上下文。
+- 实际 JAR 启动验证立即发现该问题。
+
+### Suggested Fix
+多构造器 Spring Bean 应显式使用 `@Autowired` 标记生产构造器，并保留真实 JAR 启动健康检查作为发布门槛。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/main/java/com/kma/knowledge/client/llm/PortalDesignLlmClient.java
+
+### Resolution
+- **Resolved**: 2026-07-27T17:21:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已标记生产构造器，待重新打包启动验证。
+
+---
+
+## [ERR-20260727-026] local_database_username_assumption
+
+**Logged**: 2026-07-27T17:16:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: database
+
+### Summary
+按应用配置默认值尝试使用 `kma` 用户验证本地数据库时认证失败，本机已部署实例实际使用 `postgres`。
+
+### Error
+```
+用户 "kma" Password 认证失败
+```
+
+### Context
+- 仅执行只读连接检查。
+- 随后用既有部署账号 `postgres` 成功确认目标库为 `kma_mini`、Flyway 已到 V22。
+
+### Suggested Fix
+本地启动验证前以实际运行环境或只读连接探测确认数据库用户名，不将仓库默认值等同于机器部署值。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/main/resources/application.yml
+
+### Resolution
+- **Resolved**: 2026-07-27T17:17:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 后续本机启动使用进程级 `KMA_DB_USERNAME=postgres`。
+
+---
+
+## [ERR-20260727-025] spring_boot_repackage_locked_jar
+
+**Logged**: 2026-07-27T16:25:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: tooling
+
+### Summary
+生产打包尝试覆盖当前 8090 服务正在运行的同名 JAR，Windows 文件锁使 Spring Boot repackage 无法重命名文件。
+
+### Error
+```
+Unable to rename target/kma-mini-server-0.1.0-mini.jar to ...jar.original
+```
+
+### Context
+- 当前 Mini 后端 PID 29096 直接从该 JAR 启动。
+- 编译和测试已正常通过，失败仅发生在最终 repackage。
+
+### Suggested Fix
+先完成不依赖打包的验证，切换服务时仅停止确认过的 8090 Mini 进程，再重新执行 package。
+
+### Metadata
+- Reproducible: yes
+- Related Files: pom.xml, target/kma-mini-server-0.1.0-mini.jar
+
+### Resolution
+- **Resolved**: 2026-07-27T16:26:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已确认锁文件进程和安全切换顺序。
+
+---
+
+## [ERR-20260727-024] portal_design_service_path
+
+**Logged**: 2026-07-27T16:20:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: tooling
+
+### Summary
+清理未使用导入时将门户设计服务误判在 `portal/service` 包，实际位于顶层 `service` 包。
+
+### Error
+```
+Failed to read ...\portal\service\PortalDesignService.java: path not found
+```
+
+### Context
+- 仅第一次补丁路径错误，没有修改文件。
+- 随后通过 `rg --files` 定位到正确路径。
+
+### Suggested Fix
+修改新建或不熟悉的文件前先使用 `rg --files -g "<filename>"` 确认实际路径。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/main/java/com/kma/knowledge/service/PortalDesignService.java
+
+### Resolution
+- **Resolved**: 2026-07-27T16:21:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已在正确文件中移除未使用导入。
+
+---
+
+## [ERR-20260727-023] portal_ai_stylelint_and_workdir
+
+**Logged**: 2026-07-27T17:39:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+AI 抽屉首次 Stylelint 检查发现透明度格式和选择器降序问题，且附加后端搜索使用了错误工作目录。
+
+### Error
+```
+alpha-value-notation: Expected percentage alpha to be decimal.
+no-descending-specificity: AI proposal selectors are out of order.
+rg: src/main/java/... path not found from kma-admin-web.
+```
+
+### Context
+- 格式、ESLint 和 TypeScript 已通过。
+- Stylelint 在最终阶段阻止质量门禁。
+
+### Suggested Fix
+使用小数 alpha，将低特异性选择器移到 hover/header 规则之前，并从仓库根目录搜索后端文件。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/views/lowcode/DesignerCanvasNode.vue, kma-admin-web/src/views/lowcode/PortalAiDesignDrawer.vue
+
+### Resolution
+- **Resolved**: 2026-07-27T17:39:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 样式规则已按质量门禁调整。
+
+---
+
+## [ERR-20260727-022] e2e_unscoped_designer_text
+
+**Logged**: 2026-07-27T17:34:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+拖拽成功后全局“公告栏”文本同时匹配组件库、画布、预览和属性栏。
+
+### Error
+```
+Playwright strict mode violation: getByText('公告栏') resolved to 4 elements.
+```
+
+### Context
+- 组件已经成功拖入并被选中。
+- 断言没有限定到画布区域。
+
+### Suggested Fix
+拖拽 E2E 使用画布容器内的节点类或节点数量作为权威信号。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/tests/e2e/frontend-modules-cms.spec.ts
+
+### Resolution
+- **Resolved**: 2026-07-27T17:34:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 断言已收窄到画布组件节点。
+
+---
+
+## [ERR-20260727-021] structured_clone_vue_proxy
+
+**Logged**: 2026-07-27T17:29:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+AI 提案存入 Vue ref 后成为响应式 Proxy，直接 `structuredClone` 导致应用事件中断。
+
+### Error
+```
+AI proposal remained open and the canvas did not update after “应用到草稿”.
+```
+
+### Context
+- 提案接口、预览摘要和差异统计均已成功。
+- 父组件在克隆响应式 `proposal.target` 时抛出 DataCloneError。
+
+### Suggested Fix
+设计器通用克隆函数优先使用 `structuredClone`，遇到不可克隆的响应式 Proxy 时使用 JSON 配置安全回退。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/cms/v3/designerTree.ts
+
+### Resolution
+- **Resolved**: 2026-07-27T17:29:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 通用克隆函数已兼容 Vue 响应式配置对象。
+
+---
+
+## [ERR-20260727-020] portal_toolbar_ai_overlap
+
+**Logged**: 2026-07-27T17:25:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+AI 设计入口加入全局工具栏后，在实际后台内容宽度下被右侧发布操作区覆盖。
+
+### Error
+```
+Playwright click timeout: a disabled toolbar button intercepts pointer events over “AI 设计”.
+```
+
+### Context
+- 浏览器视口为 1600px，但治理后台侧栏会压缩设计器的实际容器宽度。
+- 设计器工具栏同时包含工作区开关、保存和审核发布操作。
+
+### Suggested Fix
+将页面级 AI 入口放入画布元工具栏，并继续依据设计器容器宽度收纳全局次要操作。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/views/lowcode/PortalLowCodeDesignerView.vue
+
+### Resolution
+- **Resolved**: 2026-07-27T17:25:00+08:00
+- **Commit/PR**: pending
+- **Notes**: AI 入口移至当前页面与断点工具栏。
+
+---
+
+## [ERR-20260727-019] rg_missing_optional_scripts_directory
+
+**Logged**: 2026-07-27T17:21:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+OpenAPI 搜索命令包含不存在的根级 `scripts` 目录，导致 `rg` 非零退出。
+
+### Error
+```
+rg: scripts: 系统找不到指定的文件。
+```
+
+### Context
+- OpenAPI 配置已从 `application.yml` 和 `pom.xml` 找到。
+- 错误仅来自额外的可选搜索路径。
+
+### Suggested Fix
+组合搜索前先使用 `rg --files` 确认目录，或只传入已存在的路径。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/main/resources/application.yml, pom.xml
+
+### Resolution
+- **Resolved**: 2026-07-27T17:21:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 后续限定到已存在路径。
+
+---
+
+## [ERR-20260727-018] powershell_maven_test_list
+
+**Logged**: 2026-07-27T17:16:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+PowerShell 将 Maven `-Dtest` 中未加引号的逗号解析为参数分隔符。
+
+### Error
+```
+ParserError: Missing argument in parameter list.
+```
+
+### Context
+- 执行 `mvn -q -Dtest=PortalDesignLlmClientTest,PortalDesignServiceTest test`。
+- Maven 测试进程未启动。
+
+### Suggested Fix
+在 PowerShell 中将整个参数写为 `"-Dtest=PortalDesignLlmClientTest,PortalDesignServiceTest"`。
+
+### Metadata
+- Reproducible: yes
+- Related Files: pom.xml
+
+### Resolution
+- **Resolved**: 2026-07-27T17:16:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已改为带引号参数重跑。
+
+---
+
+## [ERR-20260727-017] portal_designer_dynamic_field_types
+
+**Logged**: 2026-07-27T17:05:00+08:00
+**Priority**: medium
+**Status**: in_progress
+**Area**: frontend
+
+### Summary
+门户设计器首次类型检查发现动态属性字段和 Element Plus 树节点签名不兼容。
+
+### Error
+```
+TS7053: advanced property key cannot index LayoutNode union
+TS2322: Element Plus tree Node is not assignable to StructureTreeHandle
+TS2322: dynamic component property v-model includes incompatible boolean/string/number unions
+```
+
+### Context
+- 新增 Schema 属性表单、结构树拖拽和高级 JSON 编辑后执行 `npm run typecheck`。
+- Vue 模板不能自动根据运行时字段 Schema 收窄联合类型。
+
+### Suggested Fix
+使用显式的属性读写函数和 Element Plus `Node` 类型适配，不在模板中直接把联合值绑定到不同控件。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/views/lowcode/PortalLowCodeDesignerView.vue
+
+---
+
+## [ERR-20260727-014] npm_argument_forwarding
+
+**Logged**: 2026-07-27T16:12:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+通过 npm script 传递 Playwright `--grep` 时参数被 npm 解析，目标测试没有执行。
+
+### Error
+```
+Error: No tests found.
+npm warn "门户设计中心加载站点 V3 草稿" is being parsed as a normal command line argument.
+npm warn Unknown cli config "--grep".
+```
+
+### Context
+- 执行了 `npm run test:e2e -- --grep "门户设计中心加载站点 V3 草稿"`。
+- 当前 npm 版本没有按预期把 `--grep` 继续传给 Playwright。
+
+### Suggested Fix
+定向运行 Playwright 用例时直接执行 `npx playwright test --grep "..."`，避免 npm script 参数转发差异。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/package.json, kma-admin-web/tests/e2e/frontend-modules-cms.spec.ts
+
+### Resolution
+- **Resolved**: 2026-07-27T16:12:00+08:00
+- **Commit/PR**: 52587fb
+- **Notes**: 后续验证改用 Playwright CLI 直接执行。
+
+---
+
 ## [ERR-20260727-016] github_remote_sha_tls_transient
 
 **Logged**: 2026-07-27T16:18:00+08:00
