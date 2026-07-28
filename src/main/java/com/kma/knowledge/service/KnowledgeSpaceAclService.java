@@ -67,21 +67,30 @@ public class KnowledgeSpaceAclService {
      * 判断当前用户是否对指定空间具有读权限
      */
     public boolean hasReadAccess(String spaceCode) {
+        return hasReadAccess(spaceCode, KmaIdentityContext.getLoginUser());
+    }
+
+    /** Evaluates a captured identity, allowing a long-running stream to recheck ACLs safely. */
+    public boolean hasReadAccess(String spaceCode, KmaPrincipal user) {
         if ("*".equals(spaceCode)) {
-            Set<Long> readable = getReadableSpaceIds();
+            Set<Long> readable = getReadableSpaceIds(user);
             return readable == null || !readable.isEmpty();
         }
         KnowledgeSpace space = spaceMapper.selectBySpaceCode(spaceCode);
         if (space == null) {
             return false;
         }
-        return hasReadAccess(space);
+        return hasReadAccess(space, user);
     }
 
     /**
      * 判断当前用户是否对指定空间具有读权限
      */
     public boolean hasReadAccess(KnowledgeSpace space) {
+        return hasReadAccess(space, KmaIdentityContext.getLoginUser());
+    }
+
+    private boolean hasReadAccess(KnowledgeSpace space, KmaPrincipal user) {
         if (space == null) {
             return false;
         }
@@ -89,11 +98,10 @@ public class KnowledgeSpaceAclService {
             return false;
         }
 
-        KmaPrincipal user = KmaIdentityContext.getLoginUser();
         if (user == null) {
             return false;
         }
-        if (KmaIdentityContext.isSuperAdmin()) {
+        if (isSuperAdmin(user)) {
             return true;
         }
 
@@ -154,7 +162,7 @@ public class KnowledgeSpaceAclService {
         if (user == null) {
             return false;
         }
-        if (KmaIdentityContext.isSuperAdmin()) {
+        if (isSuperAdmin(user)) {
             return true;
         }
 
@@ -177,7 +185,10 @@ public class KnowledgeSpaceAclService {
      * 超级管理员返回 null（表示不过滤）；未登录返回空集合。
      */
     public Set<Long> getReadableSpaceIds() {
-        KmaPrincipal user = KmaIdentityContext.getLoginUser();
+        return getReadableSpaceIds(KmaIdentityContext.getLoginUser());
+    }
+
+    private Set<Long> getReadableSpaceIds(KmaPrincipal user) {
         if (user == null) {
             return Collections.emptySet();
         }
@@ -188,7 +199,7 @@ public class KnowledgeSpaceAclService {
         List<KnowledgeSpace> spaces = spaceMapper.selectList(null);
         return spaces.stream()
             .filter(space -> SpaceStatus.ACTIVE.getCode().equals(space.getStatus()))
-            .filter(this::hasReadAccess)
+            .filter(space -> hasReadAccess(space, user))
             .map(KnowledgeSpace::getSpaceId)
             .collect(Collectors.toSet());
     }
@@ -200,7 +211,7 @@ public class KnowledgeSpaceAclService {
         List<KnowledgeSpace> spaces = spaceMapper.selectList(null);
         return spaces.stream()
             .filter(space -> SpaceStatus.ACTIVE.getCode().equals(space.getStatus()))
-            .filter(space -> KmaIdentityContext.isSuperAdmin() || hasReadAccess(space))
+            .filter(space -> isSuperAdmin(user) || hasReadAccess(space, user))
             .toList();
     }
 
@@ -256,6 +267,14 @@ public class KnowledgeSpaceAclService {
 
     private boolean isDefaultDeny() {
         return environment.getProperty("knowledge.acl.default-deny", Boolean.class, true);
+    }
+
+    private boolean isSuperAdmin(KmaPrincipal user) {
+        // Normal HTTP calls retain the established identity-context shortcut.
+        // Long-running streams pass a captured principal after their request
+        // context has gone away, so retain the principal-based check as well.
+        return KmaIdentityContext.isSuperAdmin() || (user != null && (user.getPermissions().contains("kma:admin")
+            || user.getRoles().contains("kma-admin")));
     }
 }
 

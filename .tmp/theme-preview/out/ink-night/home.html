@@ -140,15 +140,63 @@ body {
 
 /* ---------- 首屏 ---------- */
 
-.hero {
-  overflow: hidden;
-  padding: clamp(44px, 6vw, 80px) clamp(28px, 5vw, 72px);
-  border: 1px solid oklch(36% 0.02 170);
-  border-radius: var(--radius-lg);
-  background:
-    radial-gradient(circle at 88% 10%, oklch(76% 0.11 85 / 0.14), transparent 42%),
-    linear-gradient(145deg, oklch(26% 0.025 168), oklch(21% 0.016 172));
-  color: var(--ink);
+/* ---------- 书房首屏（问候 + 继续阅读 左右分栏） ---------- */
+
+.reading-head {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: clamp(24px, 4vw, 56px);
+  align-items: start;
+  max-width: 1080px;
+  margin: 0 auto clamp(28px, 5vw, 48px);
+  padding-bottom: clamp(24px, 4vw, 40px);
+  border-bottom: 1px solid var(--line);
+}
+
+.greeting { max-width: 420px; }
+
+.greeting-kicker {
+  margin: 0;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.greeting h1 {
+  margin: 12px 0 10px;
+  font-family: var(--font-serif);
+  font-size: clamp(28px, 3.6vw, 40px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.greeting-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.resume-panel .quiet-heading { font-size: 15px; }
+
+/* ---------- 阅读区块 ---------- */
+
+.reading-block {
+  max-width: 880px;
+  margin: 0 auto clamp(32px, 5vw, 52px);
+}
+
+.quiet-heading {
+  margin: 0 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--accent);
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
 }
 
 .eyebrow, .kicker {
@@ -160,87 +208,162 @@ body {
   text-transform: uppercase;
 }
 
-.hero h1 {
-  max-width: 18ch;
-  margin: 18px 0;
-  font-family: var(--font-serif);
-  font-size: clamp(36px, 5.5vw, 56px);
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  line-height: 1.25;
-}
+/* ---------- 继续阅读 ---------- */
 
-.hero-lead {
-  max-width: 52ch;
-  margin: 0;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.9;
-}
-
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
+.resume-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 12px;
-  margin-top: 30px;
 }
 
-.cta {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 10px 24px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: 14px;
-  font-weight: 700;
-  text-decoration: none;
+.resume-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent-deep);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  text-align: left;
   cursor: pointer;
-  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease), background-color 160ms var(--ease);
+  transition: border-color 160ms var(--ease), background-color 160ms var(--ease);
 }
 
-.cta:hover { transform: translateY(-1px); box-shadow: 0 12px 28px oklch(76% 0.11 85 / 0.22); }
+.resume-card:hover {
+  border-color: oklch(76% 0.11 85 / 0.5);
+  background: var(--surface-raised);
+}
 
-.cta.ghost {
+.resume-card strong { font-size: 14px; font-weight: 600; line-height: 1.5; }
+
+.resume-card span { color: var(--muted); font-size: 12px; }
+
+/* ---------- 专题书架 ---------- */
+
+.bookshelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 14px 16px;
+  padding-bottom: 18px;
+  border-bottom: 6px solid oklch(30% 0.02 80);
+  border-radius: 0 0 4px 4px;
+}
+
+.spine {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-height: 128px;
+  padding: 16px 16px 16px 24px;
+  border: 1px solid var(--line);
+  border-radius: 4px 10px 10px 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms var(--ease), border-color 160ms var(--ease), background-color 160ms var(--ease);
+}
+
+.spine::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  border-radius: 4px 0 0 4px;
+  background: var(--spine, var(--accent-deep));
+}
+
+.spine:hover {
+  transform: translateY(-3px);
   border-color: oklch(76% 0.11 85 / 0.45);
-  background: transparent;
-  color: var(--accent);
+  background: var(--surface-raised);
 }
 
-.cta.ghost:hover { background: oklch(76% 0.11 85 / 0.12); box-shadow: none; }
-
-/* ---------- 章节 ---------- */
-
-.section-block { margin-top: clamp(40px, 6vw, 64px); }
-
-.section-heading {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.section-heading h2 {
-  margin: 8px 0 0;
+.spine strong {
   font-family: var(--font-serif);
-  font-size: clamp(23px, 3vw, 30px);
-  font-weight: 800;
+  font-size: 15.5px;
   letter-spacing: 0.03em;
 }
 
-.section-more {
-  flex: none;
-  color: var(--accent);
-  font-size: 13px;
-  font-weight: 700;
-  text-decoration: none;
-  cursor: pointer;
+.spine span { color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+/* ---------- 极简文字列表 ---------- */
+
+.quiet-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.section-more:hover { text-decoration: underline; text-underline-offset: 4px; }
+.quiet-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.quiet-list li:last-child { border-bottom: 0; }
+
+.quiet-list button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: 15.5px;
+  letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+  transition: color 160ms var(--ease);
+}
+
+.quiet-list button:hover { color: var(--accent); }
+
+.quiet-list time { flex: none; color: var(--muted); font-size: 12px; }
+
+.quiet-list-roomy { max-width: 880px; }
+
+.quiet-list-roomy li { padding: 16px 4px; }
+
+.quiet-list-roomy button { display: grid; gap: 4px; }
+
+.quiet-list-roomy em {
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-style: normal;
+}
+
+/* ---------- 书签 ---------- */
+
+.bookmark-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.bookmark {
+  padding: 8px 16px;
+  border: 1px solid oklch(76% 0.11 85 / 0.4);
+  border-radius: 999px;
+  background: oklch(76% 0.11 85 / 0.1);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease);
+}
+
+.bookmark:hover { background: oklch(76% 0.11 85 / 0.2); }
 
 /* ---------- 页头 ---------- */
 
@@ -276,12 +399,6 @@ body {
 .breadcrumb a:hover { text-decoration: underline; text-underline-offset: 4px; }
 
 /* ---------- 内容卡片（widget 输出） ---------- */
-
-.kma-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
 
 .kma-card {
   min-width: 0;
@@ -477,7 +594,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
-  .kma-card:hover, .cta:hover { transform: none; }
+  .kma-card:hover, .spine:hover { transform: none; }
 }
 
 /* ---------- 响应式 ---------- */
@@ -486,12 +603,12 @@ body {
   .masthead { gap: 16px; height: 60px; }
   .brand-text small { display: none; }
   .site-nav a { padding: 8px 10px; font-size: 13px; }
+  .reading-head { grid-template-columns: 1fr; gap: 28px; }
+  .greeting { max-width: none; }
 }
 
 @media (max-width: 720px) {
-  .kma-grid { grid-template-columns: 1fr; }
-  .hero { padding: 36px 24px; }
-  .section-heading { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .quiet-list li { align-items: flex-start; flex-direction: column; gap: 4px; }
   .site-footer { flex-direction: column; align-items: flex-start; gap: 4px; }
 }
 </style></head><body><div class="kma-site">
@@ -512,34 +629,122 @@ body {
       <a href="#" data-kma-nav="profile">我的</a>
     </nav>
   </header>
-  <main class="site-main"><section class="hero">
-  <p class="eyebrow">A Quiet Place for Knowledge</p>
-  <h1>城区治理知识门户</h1>
-  <p class="hero-lead">在低干扰的阅读环境里，重访重要制度、案例与学习材料。</p>
-  <div class="hero-actions">
-    <a href="#" data-kma-nav="library" class="cta">开始阅读</a>
-    <a href="#" data-kma-nav="ask" class="cta ghost">向资料提问</a>
+  <main class="site-main"><section class="reading-head">
+  <div class="greeting">
+    <p class="greeting-kicker">Quiet Reading</p>
+    <h1>晚上好，张明远</h1>
+    <p class="greeting-sub">灯已留好。从上次停下的地方继续，或者去书架上翻翻新到的资料。</p>
+  </div>
+  <div class="resume-panel" data-auto-hide>
+    <h2 class="quiet-heading">继续阅读</h2>
+    <div class="resume-row">
+      
+      <button type="button" class="resume-card" data-kma-content="105">
+        <strong>公共安全应急预案编制指南（修订版）</strong>
+        <span>读到 2026-07-27</span>
+      </button>
+      
+      <button type="button" class="resume-card" data-kma-content="101">
+        <strong>关于进一步优化政务服务提升行政效能的指导意见</strong>
+        <span>读到 2026-07-26</span>
+      </button>
+      
+      <button type="button" class="resume-card" data-kma-content="102">
+        <strong>数字政府建设数据共享管理办法</strong>
+        <span>读到 2026-07-25</span>
+      </button>
+      
+      <button type="button" class="resume-card" data-kma-content="106">
+        <strong>政务服务窗口人员行为准则与考核办法</strong>
+        <span>读到 2026-07-23</span>
+      </button>
+      
+    </div>
   </div>
 </section>
-<section class="section-block">
-  <header class="section-heading">
-    <div>
-      <p class="kicker">Continue Exploring</p>
-      <h2>最新资料</h2>
-    </div>
-    <a href="#" data-kma-nav="library" class="section-more">查看全部 →</a>
-  </header>
-  <div class="kma-grid"><article class="kma-card"><h3>关于进一步优化政务服务提升行政效能的指导意见</h3><p>明确政务服务标准化、规范化、便利化建设的总体要求、重点任务与保障措施。</p><button data-kma-content="101">查看详情</button></article><article class="kma-card"><h3>数字政府建设数据共享管理办法</h3><p>规范政务数据目录编制、共享交换与安全使用，明确各级部门职责边界。</p><button data-kma-content="102">查看详情</button></article><article class="kma-card"><h3>基层治理典型案例汇编（2026 年第一批）</h3><p>收录十二个城市在社区网格化、接诉即办、协商议事方面的可复制经验。</p><button data-kma-content="103">查看详情</button></article><article class="kma-card"><h3>行政复议文书写作规范与常见错误解析</h3><p>结合真实案例讲解复议决定书的结构、说理方式与高频格式错误。</p><button data-kma-content="104">查看详情</button></article><article class="kma-card"><h3>公共安全应急预案编制指南（修订版）</h3><p>覆盖风险评估、组织体系、响应分级与演练评估的全流程编制方法。</p><button data-kma-content="105">查看详情</button></article><article class="kma-card"><h3>政务服务窗口人员行为准则与考核办法</h3><p>明确首问负责、一次性告知、限时办结等服务规范及配套考核指标。</p><button data-kma-content="106">查看详情</button></article></div>
+<section class="reading-block">
+  <h2 class="quiet-heading">专题书架</h2>
+  <div class="bookshelf">
+    
+    <button type="button" class="spine" style="--spine:#8d1b20" data-kma-topic="policy-study">
+      <strong>政策学习专题</strong>
+      <span>汇聚最新政策原文、权威解读与分层分类学习辅导材料。</span>
+    </button>
+    
+    <button type="button" class="spine" style="--spine:#b8860b" data-kma-topic="governance-case">
+      <strong>基层治理案例库</strong>
+      <span>按地区与场景组织的治理实践案例，支持对照检索与引用。</span>
+    </button>
+    
+    <button type="button" class="spine" style="--spine:#2f5d3a" data-kma-topic="document-writing">
+      <strong>公文写作规范</strong>
+      <span>文种选用、格式标准、常用句式与易错点清单。</span>
+    </button>
+    
+    <button type="button" class="spine" style="--spine:#1f4e79" data-kma-topic="data-sharing">
+      <strong>数据共享与开放</strong>
+      <span>数据目录、共享流程、接口规范与安全合规要求。</span>
+    </button>
+    
+    <button type="button" class="spine" style="--spine:#5a3d8a" data-kma-topic="rule-of-law">
+      <strong>依法行政</strong>
+      <span>行政执法、复议应诉、合法性审查相关制度与指引。</span>
+    </button>
+    
+    <button type="button" class="spine" style="--spine:#0f766e" data-kma-topic="service-hall">
+      <strong>政务服务大厅</strong>
+      <span>窗口设置、事项清单、办理流程与服务评价管理。</span>
+    </button>
+    
+  </div>
 </section>
-<section class="section-block">
-  <header class="section-heading">
-    <div>
-      <p class="kicker">Collections</p>
-      <h2>专题书架</h2>
-    </div>
-    <a href="#" data-kma-nav="topics" class="section-more">全部专题 →</a>
-  </header>
-  <div class="kma-grid"><article class="kma-card"><h3>政策学习专题</h3><p>汇聚最新政策原文、权威解读与分层分类学习辅导材料。</p><button data-kma-topic="policy-study">进入专题</button></article><article class="kma-card"><h3>基层治理案例库</h3><p>按地区与场景组织的治理实践案例，支持对照检索与引用。</p><button data-kma-topic="governance-case">进入专题</button></article><article class="kma-card"><h3>公文写作规范</h3><p>文种选用、格式标准、常用句式与易错点清单。</p><button data-kma-topic="document-writing">进入专题</button></article><article class="kma-card"><h3>数据共享与开放</h3><p>数据目录、共享流程、接口规范与安全合规要求。</p><button data-kma-topic="data-sharing">进入专题</button></article><article class="kma-card"><h3>依法行政</h3><p>行政执法、复议应诉、合法性审查相关制度与指引。</p><button data-kma-topic="rule-of-law">进入专题</button></article><article class="kma-card"><h3>政务服务大厅</h3><p>窗口设置、事项清单、办理流程与服务评价管理。</p><button data-kma-topic="service-hall">进入专题</button></article></div>
+<section class="reading-block">
+  <h2 class="quiet-heading">最近收录</h2>
+  <ul class="quiet-list">
+    
+    <li>
+      <button type="button" data-kma-content="101">关于进一步优化政务服务提升行政效能的指导意见</button>
+      <time>2026-07-21</time>
+    </li>
+    
+    <li>
+      <button type="button" data-kma-content="102">数字政府建设数据共享管理办法</button>
+      <time>2026-07-15</time>
+    </li>
+    
+    <li>
+      <button type="button" data-kma-content="103">基层治理典型案例汇编（2026 年第一批）</button>
+      <time>2026-07-08</time>
+    </li>
+    
+    <li>
+      <button type="button" data-kma-content="104">行政复议文书写作规范与常见错误解析</button>
+      <time>2026-06-30</time>
+    </li>
+    
+    <li>
+      <button type="button" data-kma-content="105">公共安全应急预案编制指南（修订版）</button>
+      <time>2026-06-18</time>
+    </li>
+    
+    <li>
+      <button type="button" data-kma-content="106">政务服务窗口人员行为准则与考核办法</button>
+      <time>2026-06-02</time>
+    </li>
+    
+  </ul>
+</section>
+<section class="reading-block" data-auto-hide>
+  <h2 class="quiet-heading">书签</h2>
+  <div class="bookmark-row">
+    
+    <button type="button" class="bookmark" data-kma-content="101">关于进一步优化政务服务提升行政效能的…</button>
+    
+    <button type="button" class="bookmark" data-kma-content="103">基层治理典型案例汇编（2026 年第…</button>
+    
+    <button type="button" class="bookmark" data-kma-content="104">行政复议文书写作规范与常见错误解析</button>
+    
+  </div>
 </section>
 </main>
   <footer class="site-footer">
@@ -593,6 +798,11 @@ body {
     catch(error){if(answer)answer.textContent=error?.message||error?.code||'回答失败，请稍后重试'}
   });
 })();</script><script type="module">document.documentElement.dataset.themePreset = 'ink-night'
+
+// 隐藏没有数据的区块（如暂无阅读历史、暂无书签）
+document.querySelectorAll('[data-auto-hide]').forEach((block) => {
+  if (!block.querySelector('button, li')) block.hidden = true
+})
 
 // 依据当前页面高亮主导航（page-context 能力不可用时保持静态）
 window.addEventListener('portal-sdk-ready', () => {

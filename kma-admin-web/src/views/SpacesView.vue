@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
-import { api, asList, errorMessage, unwrap } from '../api/client'
+import { api, asList, authorizedJson, errorMessage, unwrap } from '../api/client'
 import AppPagination from '../components/AppPagination.vue'
 import PageState from '../components/PageState.vue'
 import { readServerPage, useClientPagination } from '../components/listPagination'
@@ -44,6 +44,7 @@ const {
   resetPage: resetAclPage,
 } = useClientPagination(acls)
 const principalOptions = ref<PrincipalOption[]>([])
+const aclImpact = ref<Record<string, unknown>>()
 const form = reactive<SpaceForm>({
   spaceCode: '',
   name: '',
@@ -208,9 +209,25 @@ async function toggle(row: Space) {
 }
 async function loadPrincipals(type = aclForm.principalType) {
   aclForm.principalValue = ''
+  aclImpact.value = undefined
   principalOptions.value = asList<PrincipalOption>(
     await unwrap(api.GET('/api/v1/admin/access/principals', { params: { query: { type, keyword: '' } } })),
   )
+}
+async function loadAclImpact() {
+  if (!aclForm.principalValue) {
+    aclImpact.value = undefined
+    return
+  }
+  try {
+    const query = new URLSearchParams({ type: aclForm.principalType, value: aclForm.principalValue })
+    aclImpact.value = await authorizedJson<Record<string, unknown>>(
+      `/api/v1/admin/access/principals/impact?${query}`,
+    )
+  } catch (cause: unknown) {
+    aclImpact.value = undefined
+    ElMessageBox.alert(errorMessage(cause, '无法计算授权影响范围'), '授权影响提示')
+  }
 }
 async function openAcl(row: Space) {
   if (!row.spaceCode) return
@@ -238,6 +255,7 @@ async function addAcl() {
   )
   if (!result.ok) return
   Object.assign(aclForm, { principalType: 'role', principalValue: '', permission: 'read' })
+  aclImpact.value = undefined
   await openAcl(current)
 }
 async function removeAcl(acl: SpaceAcl) {
@@ -369,6 +387,7 @@ onMounted(load)
         filterable
         placeholder="选择授权主体"
         class="min-width-md"
+        @change="loadAclImpact"
         ><el-option
           v-for="item in principalOptions"
           :key="item.value"
@@ -387,6 +406,13 @@ onMounted(load)
         >添加</el-button
       >
     </div>
+    <el-alert
+      v-if="aclImpact"
+      type="warning"
+      :closable="false"
+      class="spaced-bottom"
+      :title="`本次授权将实时影响约 ${aclImpact.affectedUsers || 0} 位有效用户；该主体目前已出现在 ${aclImpact.existingAclEntries || 0} 条 ACL 中。`"
+      description="范围仅用于变更前提示；保存后服务端仍按最新用户、角色和组织关系实时判定访问。" />
     <el-table :data="pagedAcls"
       ><el-table-column prop="principalType" label="主体类型" /><el-table-column
         prop="principalDisplayName"

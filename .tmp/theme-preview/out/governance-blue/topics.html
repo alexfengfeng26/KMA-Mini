@@ -134,21 +134,20 @@ body {
   padding: clamp(24px, 4vw, 48px) clamp(20px, 4vw, 48px) 64px;
 }
 
-/* ---------- 首屏 ---------- */
+/* ---------- 命令栏首屏（扁平横向：门户信息 + 检索条） ---------- */
 
-.hero {
-  overflow: hidden;
-  padding: clamp(40px, 6vw, 72px) clamp(28px, 5vw, 64px);
-  border: 1px solid oklch(38% 0.07 252);
-  border-radius: var(--radius-lg);
-  background:
-    radial-gradient(circle at 88% 8%, oklch(62% 0.11 230 / 0.35), transparent 42%),
-    radial-gradient(circle at 8% 96%, oklch(45% 0.09 260 / 0.4), transparent 46%),
-    linear-gradient(135deg, oklch(28% 0.07 257), oklch(40% 0.1 248));
-  color: var(--on-deep);
+.command-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+  padding: 8px 0 28px;
+  border-bottom: 2px solid var(--deep);
 }
 
-.eyebrow, .kicker {
+.command-intro { min-width: 0; }
+
+.kicker {
   margin: 0;
   color: var(--accent);
   font-size: 11px;
@@ -157,57 +156,327 @@ body {
   text-transform: uppercase;
 }
 
-.hero .eyebrow { color: oklch(85% 0.06 235); }
-
-.hero h1 {
-  max-width: 18ch;
-  margin: 16px 0;
-  font-size: clamp(34px, 5vw, 54px);
+.command-intro h1 {
+  margin: 6px 0 4px;
+  font-size: clamp(24px, 3vw, 32px);
   font-weight: 800;
   letter-spacing: -0.02em;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 
-.hero-lead {
-  max-width: 56ch;
+.command-intro > p:last-child {
   margin: 0;
-  color: oklch(88% 0.02 245);
-  font-size: 16px;
-  line-height: 1.8;
+  color: var(--muted);
+  font-size: 13px;
 }
 
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 28px;
+.command-search {
+  flex: 1 1 460px;
+  max-width: 600px;
 }
 
-.cta {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 10px 22px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+.search-strip {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
   background: var(--surface);
-  color: var(--accent-strong);
+  box-shadow: var(--shadow-card);
+}
+
+.search-strip input {
+  min-width: 0;
+  min-height: 46px;
+  padding: 0 16px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 15px;
+}
+
+.search-strip button {
+  min-height: 46px;
+  padding: 0 26px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--on-deep);
+  font-family: inherit;
   font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease);
+}
+
+.search-strip button:hover { background: var(--accent-strong); }
+
+.search-hint {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* 就地检索结果 */
+.search-results {
+  max-width: 860px;
+  margin: 16px 0 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.search-result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease);
+}
+
+.search-result-row:hover { background: var(--soft); }
+
+.search-result-row strong { font-weight: 600; }
+
+.search-result-row span {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.search-empty {
+  margin: 0;
+  padding: 18px 16px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* 分类导航芯片 */
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.category-chip {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 160ms var(--ease), border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+
+.category-chip:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-2px);
+}
+
+.category-chip strong { color: var(--ink); font-size: 15px; }
+
+.category-chip span {
+  color: var(--accent);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* 工作台双栏：公报列表 + 侧栏 */
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 32px;
+  align-items: start;
+}
+
+.workbench-side {
+  display: grid;
+  gap: 20px;
+  position: sticky;
+  top: 88px;
+}
+
+.side-panel {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.side-panel .section-heading { margin-bottom: 12px; }
+
+.side-panel .section-heading h2 { font-size: 19px; }
+
+.side-topic-list { display: grid; }
+
+.side-topic {
+  display: grid;
+  gap: 3px;
+  padding: 11px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease);
+}
+
+.side-topic:last-child { border-bottom: 0; }
+
+.side-topic:hover { background: var(--soft); }
+
+.side-topic strong { color: var(--ink); font-size: 14px; }
+
+.side-topic span { color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+.quick-ask h2 { margin: 6px 0 8px; font-size: 19px; }
+
+.quick-ask p:not(.kicker) { margin: 0 0 14px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+.side-ask-link {
+  color: var(--accent);
+  font-size: 13px;
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
-  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease), background-color 160ms var(--ease);
 }
 
-.cta:hover { transform: translateY(-1px); box-shadow: 0 10px 24px oklch(20% 0.05 255 / 0.25); }
+.side-ask-link:hover { text-decoration: underline; text-underline-offset: 4px; }
 
-.cta.ghost {
-  border-color: oklch(100% 0 0 / 0.35);
+/* 公报式发文列表 */
+.bulletin-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-top: 2px solid var(--deep);
+  list-style: none;
+  counter-reset: bulletin;
+}
+
+.bulletin-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 12px;
+  border-bottom: 1px solid var(--line);
+  counter-increment: bulletin;
+  transition: background-color 160ms var(--ease);
+}
+
+.bulletin-row:hover { background: var(--surface); }
+
+.bulletin-row::before {
+  content: counter(bulletin, decimal-leading-zero);
+  flex: none;
+  width: 32px;
+  color: var(--accent);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.bulletin-body { min-width: 0; flex: 1; }
+
+.bulletin-body h3 {
+  margin: 0 0 4px;
+  color: var(--ink);
+  font-size: 16.5px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.bulletin-body p {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.bulletin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.bulletin-meta span + span::before,
+.bulletin-meta time::before { content: "· "; color: var(--line); }
+
+.bulletin-row > button {
+  flex: none;
+  min-height: 34px;
+  padding: 6px 16px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--on-deep);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease), color 160ms var(--ease);
 }
 
-.cta.ghost:hover { background: oklch(100% 0 0 / 0.1); box-shadow: none; }
+.bulletin-row > button:hover { background: var(--accent); color: var(--on-deep); }
+
+/* 专题行 */
+.topic-row-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.topic-row {
+  display: grid;
+  gap: 6px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms var(--ease), border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+
+.topic-row:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-2px);
+}
+
+.topic-row strong { color: var(--ink); font-size: 16px; }
+
+.topic-row span { color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+.topic-row i { color: var(--accent); font-size: 12px; font-style: normal; font-weight: 700; }
 
 /* ---------- 章节 ---------- */
 
@@ -272,12 +541,6 @@ body {
 .breadcrumb a:hover { text-decoration: underline; text-underline-offset: 4px; }
 
 /* ---------- 内容卡片（widget 输出） ---------- */
-
-.kma-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
 
 .kma-card {
   min-width: 0;
@@ -467,7 +730,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
-  .kma-card:hover, .cta:hover { transform: none; }
+  .kma-card:hover, .category-chip:hover, .topic-row:hover { transform: none; }
 }
 
 /* ---------- 响应式 ---------- */
@@ -476,12 +739,18 @@ body {
   .masthead { gap: 16px; height: 60px; }
   .brand-text small { display: none; }
   .site-nav a { padding: 8px 10px; font-size: 13px; }
+  .command-band { align-items: stretch; flex-direction: column; gap: 18px; }
+  .command-search { flex-basis: auto; max-width: none; }
+  .workbench { grid-template-columns: 1fr; }
+  .workbench-side { position: static; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 }
 
 @media (max-width: 720px) {
-  .kma-grid { grid-template-columns: 1fr; }
-  .hero { padding: 32px 24px; }
+  .search-strip { grid-template-columns: 1fr; gap: 6px; }
+  .search-strip input { min-height: 44px; }
   .section-heading { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .bulletin-row { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .bulletin-row::before { width: auto; }
   .site-footer { flex-direction: column; align-items: flex-start; gap: 4px; }
 }
 </style></head><body><div class="kma-site">
@@ -507,7 +776,45 @@ body {
   <h1>专题目录</h1>
   <p class="page-sub">围绕治理场景组织的结构化知识地图。</p>
 </header>
-<div class="kma-grid"><article class="kma-card"><h3>政策学习专题</h3><p>汇聚最新政策原文、权威解读与分层分类学习辅导材料。</p><button data-kma-topic="policy-study">进入专题</button></article><article class="kma-card"><h3>基层治理案例库</h3><p>按地区与场景组织的治理实践案例，支持对照检索与引用。</p><button data-kma-topic="governance-case">进入专题</button></article><article class="kma-card"><h3>公文写作规范</h3><p>文种选用、格式标准、常用句式与易错点清单。</p><button data-kma-topic="document-writing">进入专题</button></article><article class="kma-card"><h3>数据共享与开放</h3><p>数据目录、共享流程、接口规范与安全合规要求。</p><button data-kma-topic="data-sharing">进入专题</button></article><article class="kma-card"><h3>依法行政</h3><p>行政执法、复议应诉、合法性审查相关制度与指引。</p><button data-kma-topic="rule-of-law">进入专题</button></article><article class="kma-card"><h3>政务服务大厅</h3><p>窗口设置、事项清单、办理流程与服务评价管理。</p><button data-kma-topic="service-hall">进入专题</button></article></div>
+<div class="topic-row-grid">
+  
+  <button type="button" class="topic-row" data-kma-topic="policy-study">
+    <strong>政策学习专题</strong>
+    <span>汇聚最新政策原文、权威解读与分层分类学习辅导材料。</span>
+    <i>进入专题 →</i>
+  </button>
+  
+  <button type="button" class="topic-row" data-kma-topic="governance-case">
+    <strong>基层治理案例库</strong>
+    <span>按地区与场景组织的治理实践案例，支持对照检索与引用。</span>
+    <i>进入专题 →</i>
+  </button>
+  
+  <button type="button" class="topic-row" data-kma-topic="document-writing">
+    <strong>公文写作规范</strong>
+    <span>文种选用、格式标准、常用句式与易错点清单。</span>
+    <i>进入专题 →</i>
+  </button>
+  
+  <button type="button" class="topic-row" data-kma-topic="data-sharing">
+    <strong>数据共享与开放</strong>
+    <span>数据目录、共享流程、接口规范与安全合规要求。</span>
+    <i>进入专题 →</i>
+  </button>
+  
+  <button type="button" class="topic-row" data-kma-topic="rule-of-law">
+    <strong>依法行政</strong>
+    <span>行政执法、复议应诉、合法性审查相关制度与指引。</span>
+    <i>进入专题 →</i>
+  </button>
+  
+  <button type="button" class="topic-row" data-kma-topic="service-hall">
+    <strong>政务服务大厅</strong>
+    <span>窗口设置、事项清单、办理流程与服务评价管理。</span>
+    <i>进入专题 →</i>
+  </button>
+  
+</div>
 </main>
   <footer class="site-footer">
     <p>城区治理知识门户</p>
@@ -561,8 +868,8 @@ body {
   });
 })();</script><script type="module">document.documentElement.dataset.themePreset = 'governance-blue'
 
-// 依据当前页面高亮主导航（page-context 能力不可用时保持静态）
 window.addEventListener('portal-sdk-ready', () => {
+  // 依据当前页面高亮主导航（page-context 能力不可用时保持静态）
   window.portal.context.get()
     .then((context) => {
       const slug = context && context.page && context.page.slug ? context.page.slug : 'home'
@@ -572,5 +879,59 @@ window.addEventListener('portal-sdk-ready', () => {
       })
     })
     .catch(() => {})
+
+  // 首页检索条：通过受控搜索能力查询并就地渲染结果
+  const input = document.querySelector('#gov-search')
+  const submit = document.querySelector('#gov-search-submit')
+  const results = document.querySelector('#gov-search-results')
+  if (!input || !submit || !results) return
+
+  const showMessage = (text) => {
+    results.hidden = false
+    results.replaceChildren()
+    const message = document.createElement('p')
+    message.className = 'search-empty'
+    message.textContent = text
+    results.append(message)
+  }
+
+  const render = (payload) => {
+    const list = Array.isArray(payload) ? payload : payload && Array.isArray(payload.list) ? payload.list : []
+    const usable = list.filter((entry) => entry && entry.title)
+    if (!usable.length) {
+      showMessage('没有检索到匹配的资料，换个关键词试试。')
+      return
+    }
+    results.hidden = false
+    results.replaceChildren()
+    usable.slice(0, 8).forEach((entry) => {
+      const id = entry.contentId !== undefined ? entry.contentId : entry.docId !== undefined ? entry.docId : entry.id
+      const row = document.createElement('button')
+      row.type = 'button'
+      row.className = 'search-result-row'
+      if (id !== undefined && id !== null) row.dataset.kmaContent = String(id)
+      const title = document.createElement('strong')
+      title.textContent = String(entry.title)
+      row.append(title)
+      const meta = document.createElement('span')
+      meta.textContent = [entry.issuingAuthority, entry.publishDate].filter(Boolean).join(' · ')
+      row.append(meta)
+      results.append(row)
+    })
+  }
+
+  const run = () => {
+    const value = input.value.trim()
+    if (!value) return
+    showMessage('正在检索门户资料…')
+    window.portal.search.query(value)
+      .then(render)
+      .catch(() => showMessage('检索失败，请稍后重试。'))
+  }
+
+  submit.addEventListener('click', run)
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') run()
+  })
 })
 </script></body></html>

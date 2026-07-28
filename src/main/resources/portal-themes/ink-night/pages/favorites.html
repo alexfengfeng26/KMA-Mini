@@ -3,4 +3,13 @@
   <h1>书签</h1>
   <p class="page-sub">标记过的资料，留待重读。</p>
 </header>
-<kma-widget name="favorite-list" />
+<ul class="quiet-list quiet-list-roomy">
+  {% for fav in favorites %}
+  <li>
+    <button type="button" data-kma-content="{{ fav.docId }}">
+      <strong>{{ fav.title }}</strong>
+      <em>{{ fav.issuingAuthority }} · 收藏于 {{ fav.lastReadAt }}</em>
+    </button>
+  </li>
+  {% endfor %}
+</ul>

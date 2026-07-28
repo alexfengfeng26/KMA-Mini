@@ -27,6 +27,10 @@ public class PartyContentView {
     private LocalDate publishDate;
     private LocalDate effectiveDate;
     private LocalDate expiryDate;
+    private LocalDateTime scheduledOnlineAt;
+    private LocalDateTime scheduledOfflineAt;
+    private String scheduleNote;
+    private Long createdBy;
     private String validityStatus;
     private String workflowStatus;
     private String reviewDecision;

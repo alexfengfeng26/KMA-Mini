@@ -1,21 +1,50 @@
-<section class="hero">
-  <p class="eyebrow">党建知识服务</p>
-  <h1>{{ site.name }}</h1>
-  <p class="hero-lead">党章党规、政策文件、学习材料与基层实践，在这里形成可检索、可追溯的知识脉络。</p>
-  <div class="hero-actions">
-    <a href="#" data-kma-nav="library" class="cta">浏览资料</a>
-    <a href="#" data-kma-nav="ask" class="cta ghost">基于资料提问</a>
+<section class="press-masthead">
+  <div class="press-title">
+    <p class="kicker">党建知识服务</p>
+    <h1>{{ site.name }}</h1>
+    <p class="press-lead">党章党规、政策文件、学习材料与基层实践，在这里形成可检索、可追溯的知识脉络。</p>
+    <div class="hero-actions">
+      <a href="#" data-kma-nav="library" class="cta">浏览资料</a>
+      <a href="#" data-kma-nav="ask" class="cta ghost">基于资料提问</a>
+    </div>
   </div>
+  <aside class="press-rail">
+    <p class="rail-heading">今日导读</p>
+    <ul>
+      {% for item in recent %}
+      <li>
+        <button type="button" data-kma-content="{{ item.contentId }}">{{ item.title | truncate: 30 }}</button>
+        <time>{{ item.publishDate }}</time>
+      </li>
+      {% endfor %}
+    </ul>
+  </aside>
 </section>
 <section class="section-block">
   <header class="section-heading">
     <div>
-      <p class="kicker">新近收录</p>
+      <p class="kicker">今日头条</p>
       <h2>从制度文本到一线经验</h2>
     </div>
     <a href="#" data-kma-nav="library" class="section-more">查看全部 →</a>
   </header>
-  <kma-widget name="content-list" />
+  <div class="headline-grid">
+    {% for item in recent %}
+    <article class="headline-card">
+      <div class="headline-meta">
+        <span>{{ item.contentType }}</span>
+        <time>{{ item.publishDate }}</time>
+      </div>
+      <h3>{{ item.title }}</h3>
+      <p>{{ item.summary | truncate: 96 }}</p>
+      <button type="button" data-kma-content="{{ item.contentId }}">阅读原文</button>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+<section class="slogan-band">
+  <p>学思想 · 强党性 · 重实践 · 建新功</p>
+  <span>{{ site.name }} · 学习专栏</span>
 </section>
 <section class="section-block">
   <header class="section-heading">
@@ -25,5 +54,13 @@
     </div>
     <a href="#" data-kma-nav="topics" class="section-more">全部专题 →</a>
   </header>
-  <kma-widget name="topic-directory" />
+  <div class="study-list">
+    {% for topic in topics %}
+    <article class="study-item">
+      <h3>{{ topic.name }}</h3>
+      <p>{{ topic.description | truncate: 72 }}</p>
+      <button type="button" data-kma-topic="{{ topic.topicCode }}">进入学习</button>
+    </article>
+    {% endfor %}
+  </div>
 </section>

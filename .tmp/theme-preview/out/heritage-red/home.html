@@ -137,22 +137,18 @@ body {
   padding: clamp(24px, 4vw, 48px) clamp(20px, 4vw, 48px) 64px;
 }
 
-/* ---------- 首屏 ---------- */
+/* ---------- 报纸刊头首屏（标题 + 今日导读栏） ---------- */
 
-.hero {
-  overflow: hidden;
-  padding: clamp(44px, 6vw, 80px) clamp(28px, 5vw, 72px);
-  border: 1px solid oklch(52% 0.1 30);
-  border-radius: 6px 28px 6px 28px;
-  background:
-    radial-gradient(circle at 90% 6%, oklch(64% 0.12 70 / 0.38), transparent 40%),
-    linear-gradient(90deg, oklch(72% 0.1 75 / 0.16) 0 1px, transparent 1px 100%),
-    linear-gradient(135deg, oklch(30% 0.09 27), oklch(42% 0.12 25));
-  background-size: auto, 56px 100%, auto;
-  color: var(--on-deep);
+.press-masthead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: clamp(24px, 4vw, 48px);
+  align-items: start;
+  padding: 12px 0 32px;
+  border-bottom: 3px double var(--deep);
 }
 
-.eyebrow, .kicker {
+.kicker {
   margin: 0;
   color: var(--gold);
   font-size: 11px;
@@ -161,58 +157,106 @@ body {
   text-transform: uppercase;
 }
 
-.hero .eyebrow { color: oklch(82% 0.09 80); }
-
-.hero h1 {
-  max-width: 18ch;
-  margin: 18px 0;
+.press-title h1 {
+  margin: 12px 0;
+  color: var(--deep);
   font-family: var(--font-serif);
-  font-size: clamp(36px, 5.5vw, 58px);
+  font-size: clamp(32px, 4.5vw, 48px);
   font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 1.2;
 }
 
-.hero-lead {
-  max-width: 54ch;
+.press-lead {
+  max-width: 56ch;
   margin: 0;
-  color: oklch(90% 0.025 80);
-  font-size: 16px;
-  line-height: 1.9;
+  color: var(--muted);
+  font-size: 14.5px;
+  line-height: 1.8;
 }
 
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 30px;
+  margin-top: 22px;
 }
 
 .cta {
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
-  padding: 10px 24px;
-  border: 1px solid transparent;
+  min-height: 40px;
+  padding: 8px 22px;
+  border: 1px solid var(--accent);
   border-radius: 999px;
-  background: var(--on-deep);
-  color: var(--deep);
-  font-size: 14px;
+  background: var(--accent);
+  color: var(--on-deep);
+  font-size: 13.5px;
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
   transition: transform 160ms var(--ease), box-shadow 160ms var(--ease), background-color 160ms var(--ease);
 }
 
-.cta:hover { transform: translateY(-1px); box-shadow: 0 12px 26px oklch(22% 0.06 27 / 0.35); }
+.cta:hover { transform: translateY(-1px); box-shadow: 0 10px 22px oklch(35% 0.08 30 / 0.25); }
 
 .cta.ghost {
-  border-color: oklch(82% 0.06 80 / 0.55);
   background: transparent;
-  color: var(--on-deep);
+  color: var(--accent);
 }
 
-.cta.ghost:hover { background: oklch(100% 0 0 / 0.1); box-shadow: none; }
+.cta.ghost:hover { background: var(--soft); box-shadow: none; }
+
+/* 今日导读栏 */
+.press-rail {
+  padding-left: clamp(20px, 3vw, 32px);
+  border-left: 1px solid var(--line);
+}
+
+.rail-heading {
+  margin: 0 0 12px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.press-rail ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.press-rail li {
+  display: grid;
+  gap: 2px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.press-rail li:last-child { border-bottom: 0; }
+
+.press-rail li:nth-child(n+5) { display: none; }
+
+.press-rail button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+  transition: color 160ms var(--ease);
+}
+
+.press-rail button:hover { color: var(--accent); }
+
+.press-rail time { color: var(--muted); font-size: 11px; }
 
 /* ---------- 章节 ---------- */
 
@@ -278,13 +322,261 @@ body {
 
 .breadcrumb a:hover { text-decoration: underline; text-underline-offset: 4px; }
 
-/* ---------- 内容卡片（widget 输出） ---------- */
+/* ---------- 杂志头条区 ---------- */
 
-.kma-grid {
+.headline-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
+
+.headline-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease), border-color 160ms var(--ease);
+}
+
+.headline-card:hover {
+  border-color: oklch(66% 0.09 35);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-2px);
+}
+
+.headline-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 11px;
+}
+
+.headline-meta span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.headline-meta time { color: var(--muted); }
+
+.headline-card h3 {
+  margin: 0 0 8px;
+  color: var(--deep);
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+}
+
+.headline-card p {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.75;
+}
+
+.headline-card button {
+  align-self: flex-start;
+  margin-top: auto;
+  min-height: 36px;
+  padding: 7px 18px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease), color 160ms var(--ease);
+}
+
+.headline-card button:hover { background: var(--accent); color: var(--on-deep); }
+
+/* 首条特写：跨满整行的大字头条 */
+.headline-card:first-child {
+  grid-column: 1 / -1;
+  padding: clamp(28px, 4vw, 44px);
+  background:
+    radial-gradient(circle at 96% 0%, oklch(93% 0.03 85 / 0.9), transparent 46%),
+    var(--surface);
+}
+
+.headline-card:first-child h3 {
+  max-width: 26ch;
+  font-size: clamp(24px, 3.4vw, 36px);
+  line-height: 1.35;
+}
+
+.headline-card:first-child p { max-width: 72ch; font-size: 15px; }
+
+/* ---------- 金句横幅 ---------- */
+
+.slogan-band {
+  margin-top: clamp(40px, 6vw, 64px);
+  padding: clamp(28px, 4vw, 44px) clamp(24px, 4vw, 48px);
+  border-radius: 6px 24px 6px 24px;
+  background:
+    radial-gradient(circle at 92% 12%, oklch(64% 0.12 70 / 0.3), transparent 42%),
+    linear-gradient(135deg, oklch(30% 0.09 27), oklch(38% 0.11 25));
+  color: var(--on-deep);
+  text-align: center;
+}
+
+.slogan-band p {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(20px, 3vw, 30px);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.slogan-band span {
+  display: block;
+  margin-top: 10px;
+  color: oklch(82% 0.06 75);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+}
+
+/* ---------- 编号专题学习 ---------- */
+
+.study-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  counter-reset: study;
+}
+
+.study-item {
+  position: relative;
+  min-width: 0;
+  padding: 26px 26px 26px 84px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  counter-increment: study;
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease), border-color 160ms var(--ease);
+}
+
+.study-item:hover {
+  border-color: oklch(66% 0.09 35);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-2px);
+}
+
+.study-item::before {
+  content: counter(study, decimal-leading-zero);
+  position: absolute;
+  top: 22px;
+  left: 24px;
+  color: var(--gold);
+  font-family: var(--font-serif);
+  font-size: 34px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.study-item h3 {
+  margin: 0 0 8px;
+  color: var(--deep);
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.study-item p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.75;
+}
+
+.study-item button {
+  min-height: 36px;
+  padding: 7px 18px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease), color 160ms var(--ease);
+}
+
+.study-item button:hover { background: var(--accent); color: var(--on-deep); }
+
+/* ---------- 档案行式列表 ---------- */
+
+.archive-list {
+  display: grid;
+  border-top: 2px solid var(--accent);
+}
+
+.archive-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 20px;
+  align-items: center;
+  padding: 18px 8px;
+  border-bottom: 1px solid var(--line);
+  transition: background-color 160ms var(--ease);
+}
+
+.archive-row:hover { background: var(--surface); }
+
+.archive-row h3 {
+  margin: 0;
+  color: var(--deep);
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.archive-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.archive-meta span + span::before,
+.archive-meta time::before { content: "· "; color: var(--line); }
+
+.archive-row button {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  min-height: 34px;
+  padding: 6px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease), color 160ms var(--ease);
+}
+
+.archive-row button:hover { background: var(--accent); color: var(--on-deep); }
+
+/* ---------- 内容卡片（widget 输出） ---------- */
 
 .kma-card {
   min-width: 0;
@@ -479,7 +771,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
-  .kma-card:hover, .cta:hover { transform: none; }
+  .kma-card:hover, .headline-card:hover, .study-item:hover, .cta:hover { transform: none; }
 }
 
 /* ---------- 响应式 ---------- */
@@ -488,11 +780,17 @@ body {
   .masthead { gap: 16px; height: 62px; }
   .brand-text small { display: none; }
   .site-nav a { padding: 8px 10px; font-size: 13px; }
+  .press-masthead { grid-template-columns: 1fr; }
+  .press-rail { padding-top: 20px; padding-left: 0; border-top: 1px solid var(--line); border-left: 0; }
+  .headline-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .study-list { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {
-  .kma-grid { grid-template-columns: 1fr; }
-  .hero { padding: 36px 24px; border-radius: 6px 20px 6px 20px; }
+  .headline-grid { grid-template-columns: 1fr; }
+  .study-item { padding-left: 72px; }
+  .archive-row { grid-template-columns: 1fr; }
+  .archive-row button { grid-row: auto; grid-column: auto; justify-self: start; margin-top: 8px; }
   .section-heading { align-items: flex-start; flex-direction: column; gap: 8px; }
   .site-footer { flex-direction: column; align-items: flex-start; gap: 4px; }
 }
@@ -514,24 +812,128 @@ body {
       <a href="#" data-kma-nav="profile">个人中心</a>
     </nav>
   </header>
-  <main class="site-main"><section class="hero">
-  <p class="eyebrow">党建知识服务</p>
-  <h1>城区治理知识门户</h1>
-  <p class="hero-lead">党章党规、政策文件、学习材料与基层实践，在这里形成可检索、可追溯的知识脉络。</p>
-  <div class="hero-actions">
-    <a href="#" data-kma-nav="library" class="cta">浏览资料</a>
-    <a href="#" data-kma-nav="ask" class="cta ghost">基于资料提问</a>
+  <main class="site-main"><section class="press-masthead">
+  <div class="press-title">
+    <p class="kicker">党建知识服务</p>
+    <h1>城区治理知识门户</h1>
+    <p class="press-lead">党章党规、政策文件、学习材料与基层实践，在这里形成可检索、可追溯的知识脉络。</p>
+    <div class="hero-actions">
+      <a href="#" data-kma-nav="library" class="cta">浏览资料</a>
+      <a href="#" data-kma-nav="ask" class="cta ghost">基于资料提问</a>
+    </div>
   </div>
+  <aside class="press-rail">
+    <p class="rail-heading">今日导读</p>
+    <ul>
+      
+      <li>
+        <button type="button" data-kma-content="101">关于进一步优化政务服务提升行政效能的指导意见</button>
+        <time>2026-07-21</time>
+      </li>
+      
+      <li>
+        <button type="button" data-kma-content="102">数字政府建设数据共享管理办法</button>
+        <time>2026-07-15</time>
+      </li>
+      
+      <li>
+        <button type="button" data-kma-content="103">基层治理典型案例汇编（2026 年第一批）</button>
+        <time>2026-07-08</time>
+      </li>
+      
+      <li>
+        <button type="button" data-kma-content="104">行政复议文书写作规范与常见错误解析</button>
+        <time>2026-06-30</time>
+      </li>
+      
+      <li>
+        <button type="button" data-kma-content="105">公共安全应急预案编制指南（修订版）</button>
+        <time>2026-06-18</time>
+      </li>
+      
+      <li>
+        <button type="button" data-kma-content="106">政务服务窗口人员行为准则与考核办法</button>
+        <time>2026-06-02</time>
+      </li>
+      
+    </ul>
+  </aside>
 </section>
 <section class="section-block">
   <header class="section-heading">
     <div>
-      <p class="kicker">新近收录</p>
+      <p class="kicker">今日头条</p>
       <h2>从制度文本到一线经验</h2>
     </div>
     <a href="#" data-kma-nav="library" class="section-more">查看全部 →</a>
   </header>
-  <div class="kma-grid"><article class="kma-card"><h3>关于进一步优化政务服务提升行政效能的指导意见</h3><p>明确政务服务标准化、规范化、便利化建设的总体要求、重点任务与保障措施。</p><button data-kma-content="101">查看详情</button></article><article class="kma-card"><h3>数字政府建设数据共享管理办法</h3><p>规范政务数据目录编制、共享交换与安全使用，明确各级部门职责边界。</p><button data-kma-content="102">查看详情</button></article><article class="kma-card"><h3>基层治理典型案例汇编（2026 年第一批）</h3><p>收录十二个城市在社区网格化、接诉即办、协商议事方面的可复制经验。</p><button data-kma-content="103">查看详情</button></article><article class="kma-card"><h3>行政复议文书写作规范与常见错误解析</h3><p>结合真实案例讲解复议决定书的结构、说理方式与高频格式错误。</p><button data-kma-content="104">查看详情</button></article><article class="kma-card"><h3>公共安全应急预案编制指南（修订版）</h3><p>覆盖风险评估、组织体系、响应分级与演练评估的全流程编制方法。</p><button data-kma-content="105">查看详情</button></article><article class="kma-card"><h3>政务服务窗口人员行为准则与考核办法</h3><p>明确首问负责、一次性告知、限时办结等服务规范及配套考核指标。</p><button data-kma-content="106">查看详情</button></article></div>
+  <div class="headline-grid">
+    
+    <article class="headline-card">
+      <div class="headline-meta">
+        <span>政策文件</span>
+        <time>2026-07-21</time>
+      </div>
+      <h3>关于进一步优化政务服务提升行政效能的指导意见</h3>
+      <p>明确政务服务标准化、规范化、便利化建设的总体要求、重点任务与保障措施。</p>
+      <button type="button" data-kma-content="101">阅读原文</button>
+    </article>
+    
+    <article class="headline-card">
+      <div class="headline-meta">
+        <span>制度规范</span>
+        <time>2026-07-15</time>
+      </div>
+      <h3>数字政府建设数据共享管理办法</h3>
+      <p>规范政务数据目录编制、共享交换与安全使用，明确各级部门职责边界。</p>
+      <button type="button" data-kma-content="102">阅读原文</button>
+    </article>
+    
+    <article class="headline-card">
+      <div class="headline-meta">
+        <span>案例汇编</span>
+        <time>2026-07-08</time>
+      </div>
+      <h3>基层治理典型案例汇编（2026 年第一批）</h3>
+      <p>收录十二个城市在社区网格化、接诉即办、协商议事方面的可复制经验。</p>
+      <button type="button" data-kma-content="103">阅读原文</button>
+    </article>
+    
+    <article class="headline-card">
+      <div class="headline-meta">
+        <span>业务指引</span>
+        <time>2026-06-30</time>
+      </div>
+      <h3>行政复议文书写作规范与常见错误解析</h3>
+      <p>结合真实案例讲解复议决定书的结构、说理方式与高频格式错误。</p>
+      <button type="button" data-kma-content="104">阅读原文</button>
+    </article>
+    
+    <article class="headline-card">
+      <div class="headline-meta">
+        <span>业务指引</span>
+        <time>2026-06-18</time>
+      </div>
+      <h3>公共安全应急预案编制指南（修订版）</h3>
+      <p>覆盖风险评估、组织体系、响应分级与演练评估的全流程编制方法。</p>
+      <button type="button" data-kma-content="105">阅读原文</button>
+    </article>
+    
+    <article class="headline-card">
+      <div class="headline-meta">
+        <span>制度规范</span>
+        <time>2026-06-02</time>
+      </div>
+      <h3>政务服务窗口人员行为准则与考核办法</h3>
+      <p>明确首问负责、一次性告知、限时办结等服务规范及配套考核指标。</p>
+      <button type="button" data-kma-content="106">阅读原文</button>
+    </article>
+    
+  </div>
+</section>
+<section class="slogan-band">
+  <p>学思想 · 强党性 · 重实践 · 建新功</p>
+  <span>城区治理知识门户 · 学习专栏</span>
 </section>
 <section class="section-block">
   <header class="section-heading">
@@ -541,7 +943,45 @@ body {
     </div>
     <a href="#" data-kma-nav="topics" class="section-more">全部专题 →</a>
   </header>
-  <div class="kma-grid"><article class="kma-card"><h3>政策学习专题</h3><p>汇聚最新政策原文、权威解读与分层分类学习辅导材料。</p><button data-kma-topic="policy-study">进入专题</button></article><article class="kma-card"><h3>基层治理案例库</h3><p>按地区与场景组织的治理实践案例，支持对照检索与引用。</p><button data-kma-topic="governance-case">进入专题</button></article><article class="kma-card"><h3>公文写作规范</h3><p>文种选用、格式标准、常用句式与易错点清单。</p><button data-kma-topic="document-writing">进入专题</button></article><article class="kma-card"><h3>数据共享与开放</h3><p>数据目录、共享流程、接口规范与安全合规要求。</p><button data-kma-topic="data-sharing">进入专题</button></article><article class="kma-card"><h3>依法行政</h3><p>行政执法、复议应诉、合法性审查相关制度与指引。</p><button data-kma-topic="rule-of-law">进入专题</button></article><article class="kma-card"><h3>政务服务大厅</h3><p>窗口设置、事项清单、办理流程与服务评价管理。</p><button data-kma-topic="service-hall">进入专题</button></article></div>
+  <div class="study-list">
+    
+    <article class="study-item">
+      <h3>政策学习专题</h3>
+      <p>汇聚最新政策原文、权威解读与分层分类学习辅导材料。</p>
+      <button type="button" data-kma-topic="policy-study">进入学习</button>
+    </article>
+    
+    <article class="study-item">
+      <h3>基层治理案例库</h3>
+      <p>按地区与场景组织的治理实践案例，支持对照检索与引用。</p>
+      <button type="button" data-kma-topic="governance-case">进入学习</button>
+    </article>
+    
+    <article class="study-item">
+      <h3>公文写作规范</h3>
+      <p>文种选用、格式标准、常用句式与易错点清单。</p>
+      <button type="button" data-kma-topic="document-writing">进入学习</button>
+    </article>
+    
+    <article class="study-item">
+      <h3>数据共享与开放</h3>
+      <p>数据目录、共享流程、接口规范与安全合规要求。</p>
+      <button type="button" data-kma-topic="data-sharing">进入学习</button>
+    </article>
+    
+    <article class="study-item">
+      <h3>依法行政</h3>
+      <p>行政执法、复议应诉、合法性审查相关制度与指引。</p>
+      <button type="button" data-kma-topic="rule-of-law">进入学习</button>
+    </article>
+    
+    <article class="study-item">
+      <h3>政务服务大厅</h3>
+      <p>窗口设置、事项清单、办理流程与服务评价管理。</p>
+      <button type="button" data-kma-topic="service-hall">进入学习</button>
+    </article>
+    
+  </div>
 </section>
 </main>
   <footer class="site-footer">

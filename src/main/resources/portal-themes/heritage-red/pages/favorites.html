@@ -3,4 +3,15 @@
   <h1>我的收藏</h1>
   <p class="page-sub">已收藏的资料，可随时回看与引用。</p>
 </header>
-<kma-widget name="favorite-list" />
+<div class="archive-list">
+  {% for fav in favorites %}
+  <article class="archive-row">
+    <h3>{{ fav.title }}</h3>
+    <div class="archive-meta">
+      <span>{{ fav.issuingAuthority }}</span>
+      <time>收藏于 {{ fav.lastReadAt }}</time>
+    </div>
+    <button type="button" data-kma-content="{{ fav.docId }}">阅读原文</button>
+  </article>
+  {% endfor %}
+</div>

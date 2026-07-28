@@ -10,21 +10,42 @@ const themesRoot = join(repoRoot, 'src', 'main', 'resources', 'portal-themes')
 const outRoot = join(here, 'out')
 
 const recent = [
-  { contentId: 101, title: '关于进一步优化政务服务提升行政效能的指导意见', summary: '明确政务服务标准化、规范化、便利化建设的总体要求、重点任务与保障措施。', issuingAuthority: '国务院办公厅' },
-  { contentId: 102, title: '数字政府建设数据共享管理办法', summary: '规范政务数据目录编制、共享交换与安全使用，明确各级部门职责边界。', issuingAuthority: '数据发展司' },
-  { contentId: 103, title: '基层治理典型案例汇编（2026 年第一批）', summary: '收录十二个城市在社区网格化、接诉即办、协商议事方面的可复制经验。', issuingAuthority: '政策研究室' },
-  { contentId: 104, title: '行政复议文书写作规范与常见错误解析', summary: '结合真实案例讲解复议决定书的结构、说理方式与高频格式错误。', issuingAuthority: '法规司' },
-  { contentId: 105, title: '公共安全应急预案编制指南（修订版）', summary: '覆盖风险评估、组织体系、响应分级与演练评估的全流程编制方法。', issuingAuthority: '应急管理办公室' },
-  { contentId: 106, title: '政务服务窗口人员行为准则与考核办法', summary: '明确首问负责、一次性告知、限时办结等服务规范及配套考核指标。', issuingAuthority: '政务服务局' },
+  { contentId: 101, title: '关于进一步优化政务服务提升行政效能的指导意见', summary: '明确政务服务标准化、规范化、便利化建设的总体要求、重点任务与保障措施。', issuingAuthority: '国务院办公厅', documentNumber: '国办发〔2026〕12 号', publishDate: '2026-07-21', contentType: '政策文件', validityStatus: '现行有效' },
+  { contentId: 102, title: '数字政府建设数据共享管理办法', summary: '规范政务数据目录编制、共享交换与安全使用，明确各级部门职责边界。', issuingAuthority: '数据发展司', documentNumber: '数发规〔2026〕4 号', publishDate: '2026-07-15', contentType: '制度规范', validityStatus: '现行有效' },
+  { contentId: 103, title: '基层治理典型案例汇编（2026 年第一批）', summary: '收录十二个城市在社区网格化、接诉即办、协商议事方面的可复制经验。', issuingAuthority: '政策研究室', documentNumber: '', publishDate: '2026-07-08', contentType: '案例汇编', validityStatus: '现行有效' },
+  { contentId: 104, title: '行政复议文书写作规范与常见错误解析', summary: '结合真实案例讲解复议决定书的结构、说理方式与高频格式错误。', issuingAuthority: '法规司', documentNumber: '', publishDate: '2026-06-30', contentType: '业务指引', validityStatus: '现行有效' },
+  { contentId: 105, title: '公共安全应急预案编制指南（修订版）', summary: '覆盖风险评估、组织体系、响应分级与演练评估的全流程编制方法。', issuingAuthority: '应急管理办公室', documentNumber: '应急办函〔2026〕31 号', publishDate: '2026-06-18', contentType: '业务指引', validityStatus: '现行有效' },
+  { contentId: 106, title: '政务服务窗口人员行为准则与考核办法', summary: '明确首问负责、一次性告知、限时办结等服务规范及配套考核指标。', issuingAuthority: '政务服务局', documentNumber: '政服发〔2026〕7 号', publishDate: '2026-06-02', contentType: '制度规范', validityStatus: '现行有效' },
 ]
 
 const topics = [
-  { topicCode: 'policy-study', name: '政策学习专题', description: '汇聚最新政策原文、权威解读与分层分类学习辅导材料。' },
-  { topicCode: 'governance-case', name: '基层治理案例库', description: '按地区与场景组织的治理实践案例，支持对照检索与引用。' },
-  { topicCode: 'document-writing', name: '公文写作规范', description: '文种选用、格式标准、常用句式与易错点清单。' },
-  { topicCode: 'data-sharing', name: '数据共享与开放', description: '数据目录、共享流程、接口规范与安全合规要求。' },
-  { topicCode: 'rule-of-law', name: '依法行政', description: '行政执法、复议应诉、合法性审查相关制度与指引。' },
-  { topicCode: 'service-hall', name: '政务服务大厅', description: '窗口设置、事项清单、办理流程与服务评价管理。' },
+  { topicCode: 'policy-study', name: '政策学习专题', description: '汇聚最新政策原文、权威解读与分层分类学习辅导材料。', coverColor: '#8d1b20' },
+  { topicCode: 'governance-case', name: '基层治理案例库', description: '按地区与场景组织的治理实践案例，支持对照检索与引用。', coverColor: '#b8860b' },
+  { topicCode: 'document-writing', name: '公文写作规范', description: '文种选用、格式标准、常用句式与易错点清单。', coverColor: '#2f5d3a' },
+  { topicCode: 'data-sharing', name: '数据共享与开放', description: '数据目录、共享流程、接口规范与安全合规要求。', coverColor: '#1f4e79' },
+  { topicCode: 'rule-of-law', name: '依法行政', description: '行政执法、复议应诉、合法性审查相关制度与指引。', coverColor: '#5a3d8a' },
+  { topicCode: 'service-hall', name: '政务服务大厅', description: '窗口设置、事项清单、办理流程与服务评价管理。', coverColor: '#0f766e' },
+]
+
+const favorites = [
+  { favoriteId: 1, docId: 101, title: '关于进一步优化政务服务提升行政效能的指导意见', issuingAuthority: '国务院办公厅', lastReadAt: '2026-07-26' },
+  { favoriteId: 2, docId: 103, title: '基层治理典型案例汇编（2026 年第一批）', issuingAuthority: '政策研究室', lastReadAt: '2026-07-24' },
+  { favoriteId: 3, docId: 104, title: '行政复议文书写作规范与常见错误解析', issuingAuthority: '法规司', lastReadAt: '2026-07-20' },
+]
+
+const history = [
+  { docId: 105, title: '公共安全应急预案编制指南（修订版）', issuingAuthority: '应急管理办公室', lastReadAt: '2026-07-27' },
+  { docId: 101, title: '关于进一步优化政务服务提升行政效能的指导意见', issuingAuthority: '国务院办公厅', lastReadAt: '2026-07-26' },
+  { docId: 102, title: '数字政府建设数据共享管理办法', issuingAuthority: '数据发展司', lastReadAt: '2026-07-25' },
+  { docId: 106, title: '政务服务窗口人员行为准则与考核办法', issuingAuthority: '政务服务局', lastReadAt: '2026-07-23' },
+]
+
+const categories = [
+  { contentType: 'policy', name: '政策文件', total: 128 },
+  { contentType: 'regulation', name: '制度规范', total: 86 },
+  { contentType: 'guide', name: '业务指引', total: 64 },
+  { contentType: 'case', name: '案例汇编', total: 42 },
+  { contentType: 'notice', name: '通知公告', total: 37 },
 ]
 
 const currentContent = {
@@ -83,7 +104,7 @@ for (const themeKey of targets) {
       assistant: undefined,
       page: { slug, kind: 'system', title, template: `pages/${slug}.html` },
       extensions: [],
-      portalData: { recent, topics, favorites: recent.slice(0, 3), history: [] },
+      portalData: { config: { unitName: '城区治理示范区', helpText: '', currentTopicCode: '' }, categories, recent, topics, favorites, history },
       themeData: {
         user: { userId: 7, username: 'zhang.my', displayName: '张明远' },
         currentContent,

@@ -63,6 +63,14 @@ public class KnowledgeDoc implements Serializable {
 
     private LocalDate expiryDate;
 
+    private LocalDateTime scheduledOnlineAt;
+
+    private LocalDateTime scheduledOfflineAt;
+
+    private String scheduleNote;
+
+    private Long createdBy;
+
     private String validityStatus;
 
     private String workflowStatus;

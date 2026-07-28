@@ -3,4 +3,11 @@
   <h1>专题书架</h1>
   <p class="page-sub">按主题归置的知识架位。</p>
 </header>
-<kma-widget name="topic-directory" />
+<div class="bookshelf bookshelf-page">
+  {% for topic in topics %}
+  <button type="button" class="spine" {% if topic.coverColor %}style="--spine:{{ topic.coverColor }}"{% endif %} data-kma-topic="{{ topic.topicCode }}">
+    <strong>{{ topic.name }}</strong>
+    <span>{{ topic.description | truncate: 44 }}</span>
+  </button>
+  {% endfor %}
+</div>

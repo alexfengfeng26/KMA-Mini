@@ -14,7 +14,7 @@ import {
   type PartyContentRequest,
   type PortalTopic,
 } from '../api/party'
-import { errorMessage } from '../api/client'
+import { authorizedJson, errorMessage } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import AppPagination from '../components/AppPagination.vue'
 import PageState from '../components/PageState.vue'
@@ -34,6 +34,9 @@ interface ContentForm {
   publishDate: string
   effectiveDate: string
   expiryDate: string
+  scheduledOnlineAt: string
+  scheduledOfflineAt: string
+  scheduleNote: string
   validityStatus: string
   summary: string
   keywords: string
@@ -56,7 +59,11 @@ const route = useRoute(),
   file = ref<File>(),
   mode = ref<'text' | 'file'>('text'),
   saving = ref(false),
-  actionPendingId = ref<number>()
+  actionPendingId = ref<number>(),
+  governanceInsights = ref<Record<string, number>>({}),
+  governancePolicy = ref({ contentSeparationOfDuties: false }),
+  policySaving = ref(false),
+  contentImpact = ref<Record<string, number>>({})
 const versionPage = ref(1),
   versionPageSize = ref(10)
 const pagedVersions = computed(
@@ -86,6 +93,9 @@ const form = reactive<ContentForm>({
   publishDate: new Date().toISOString().slice(0, 10),
   effectiveDate: '',
   expiryDate: '',
+  scheduledOnlineAt: '',
+  scheduledOfflineAt: '',
+  scheduleNote: '',
   validityStatus: 'effective',
   summary: '',
   keywords: '',
@@ -148,6 +158,36 @@ async function load(reset = false) {
     loading.value = false
   }
 }
+async function loadGovernanceSignals() {
+  if (!can('content:read')) return
+  try {
+    const [insights, policy] = await Promise.all([
+      authorizedJson<Record<string, number>>('/api/v1/admin/governance/insights'),
+      authorizedJson<{ contentSeparationOfDuties?: boolean }>('/api/v1/admin/governance/policy'),
+    ])
+    governanceInsights.value = insights
+    governancePolicy.value.contentSeparationOfDuties = Boolean(policy.contentSeparationOfDuties)
+  } catch {
+    // Content work remains available if an optional governance dashboard is unavailable.
+  }
+}
+async function saveSeparationOfDuties(enabled: boolean) {
+  if (!can('content:publish') || policySaving.value) return
+  policySaving.value = true
+  try {
+    await authorizedJson('/api/v1/admin/governance/policy', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentSeparationOfDuties: enabled }),
+    })
+    ElMessage.success(enabled ? '已启用提交者与审核/发布者职责分离' : '已关闭职责分离')
+  } catch (cause: unknown) {
+    governancePolicy.value.contentSeparationOfDuties = !enabled
+    ElMessage.error(errorMessage(cause, '治理策略更新失败'))
+  } finally {
+    policySaving.value = false
+  }
+}
 function openCreate() {
   editingId.value = undefined
   Object.assign(form, {
@@ -163,6 +203,9 @@ function openCreate() {
     publishDate: new Date().toISOString().slice(0, 10),
     effectiveDate: '',
     expiryDate: '',
+    scheduledOnlineAt: '',
+    scheduledOfflineAt: '',
+    scheduleNote: '',
     validityStatus: 'effective',
     summary: '',
     keywords: '',
@@ -188,6 +231,9 @@ function openEdit(row: PartyContent) {
     publishDate: row.publishDate || new Date().toISOString().slice(0, 10),
     effectiveDate: row.effectiveDate || '',
     expiryDate: row.expiryDate || '',
+    scheduledOnlineAt: (row as PartyContent & { scheduledOnlineAt?: string }).scheduledOnlineAt || '',
+    scheduledOfflineAt: (row as PartyContent & { scheduledOfflineAt?: string }).scheduledOfflineAt || '',
+    scheduleNote: (row as PartyContent & { scheduleNote?: string }).scheduleNote || '',
     validityStatus: row.validityStatus || 'effective',
     summary: row.summary || '',
     keywords: (row.keywords || []).join('，'),
@@ -198,7 +244,11 @@ function openEdit(row: PartyContent) {
   dialog.value = true
   markFormClean()
 }
-function payload(): PartyContentRequest {
+function payload(): PartyContentRequest & {
+  scheduledOnlineAt?: string
+  scheduledOfflineAt?: string
+  scheduleNote?: string
+} {
   return {
     title: form.title.trim(),
     spaceCode: form.spaceCode.trim(),
@@ -212,6 +262,9 @@ function payload(): PartyContentRequest {
     publishDate: form.publishDate,
     effectiveDate: form.effectiveDate || undefined,
     expiryDate: form.expiryDate || undefined,
+    scheduledOnlineAt: form.scheduledOnlineAt || undefined,
+    scheduledOfflineAt: form.scheduledOfflineAt || undefined,
+    scheduleNote: form.scheduleNote || undefined,
     validityStatus: form.validityStatus,
     summary: form.summary || undefined,
     keywords: form.keywords.split(/[，,\s]+/).filter(Boolean),
@@ -259,6 +312,13 @@ async function save() {
       summary: body.summary,
       keywords: body.keywords,
       topicCodes: body.topicCodes,
+      scheduledOnlineAt: body.scheduledOnlineAt,
+      scheduledOfflineAt: body.scheduledOfflineAt,
+      scheduleNote: body.scheduleNote,
+    } as Parameters<typeof updateContentMetadata>[1] & {
+      scheduledOnlineAt?: string
+      scheduledOfflineAt?: string
+      scheduleNote?: string
     })
     ElMessage.success('内容元数据已更新')
     cleanFormSnapshot.value = ''
@@ -272,7 +332,14 @@ async function save() {
 }
 async function inspect(row: PartyContent) {
   if (!row.contentId) return
-  detail.value = await getAdminContent(row.contentId)
+  const [content, impact] = await Promise.all([
+    getAdminContent(row.contentId),
+    authorizedJson<Record<string, number>>(`/api/v1/admin/governance/contents/${row.contentId}/impact`).catch(
+      () => ({}),
+    ),
+  ])
+  detail.value = content
+  contentImpact.value = impact
   versionPage.value = 1
   detailDialog.value = true
 }
@@ -329,7 +396,7 @@ onMounted(async () => {
   } catch (cause: unknown) {
     ElMessage.warning(errorMessage(cause, '专题列表暂时不可用'))
   }
-  await load()
+  await Promise.all([load(), loadGovernanceSignals()])
 })
 watch(
   () => route.meta.governanceMode,
@@ -359,6 +426,36 @@ watch(
         @click="openCreate"
         >新增内容</el-button
       >
+    </div>
+    <div v-if="Object.keys(governanceInsights).length" class="governance-signals">
+      <div
+        v-for="(label, key) in {
+          scheduledOnline: '待上线',
+          scheduledOffline: '待下线',
+          expiringSoon: '30 天内到期',
+          parsePending: '待处理解析',
+          withoutTopics: '未归专题',
+          duplicateReferences: '疑似重复文号',
+          unhelpfulAnswers: '低评价问答',
+          searchWithoutResult: '无结果搜索',
+        }"
+        :key="key"
+        class="signal"
+      >
+        <span>{{ label }}</span
+        ><strong>{{ governanceInsights[key] || 0 }}</strong>
+      </div>
+      <el-tooltip content="启用后，内容提交者不能审核或发布自己创建的内容。管理员仍可调整此策略。">
+        <el-switch
+          v-if="can('content:publish')"
+          v-model="governancePolicy.contentSeparationOfDuties"
+          inline-prompt
+          active-text="职责分离"
+          inactive-text="可自审"
+          :loading="policySaving"
+          @change="saveSeparationOfDuties(Boolean($event))"
+        />
+      </el-tooltip>
     </div>
     <div class="filter-bar">
       <el-input v-model="filters.keyword" placeholder="标题 / 文号 / 机关" clearable /><el-select
@@ -525,6 +622,24 @@ watch(
                 value="pending" /><el-option label="已失效" value="expired" /><el-option
                 label="已废止"
                 value="repealed" /></el-select></el-form-item></el-col></el-row
+      ><el-row :gutter="16"
+        ><el-col :span="12"
+          ><el-form-item label="计划上线时间（可选）"
+            ><input
+              v-model="form.scheduledOnlineAt"
+              class="native-field"
+              type="datetime-local" /></el-form-item
+        ></el-col>
+        <el-col :span="12"
+          ><el-form-item label="计划下线时间（可选）"
+            ><input
+              v-model="form.scheduledOfflineAt"
+              class="native-field"
+              type="datetime-local" /></el-form-item></el-col
+      ></el-row>
+      ><el-form-item label="计划说明"
+        ><el-input v-model="form.scheduleNote" maxlength="1000" placeholder="例如：专题学习周开始时上线"
+      /></el-form-item>
       ><el-form-item label="专题"
         ><el-select v-model="form.topicCodes" multiple
           ><el-option
@@ -565,10 +680,21 @@ watch(
         ><el-descriptions-item label="效力">{{ detail.validityStatus }}</el-descriptions-item
         ><el-descriptions-item label="流程">{{ status(detail) }}</el-descriptions-item
         ><el-descriptions-item label="解析">{{ detail.parseStatus }}</el-descriptions-item
-        ><el-descriptions-item label="版本"
-          >v{{ detail.sourceVersion }}</el-descriptions-item
+        ><el-descriptions-item label="版本">v{{ detail.sourceVersion }}</el-descriptions-item
+        ><el-descriptions-item label="计划上线">{{
+          (detail as PartyContent & { scheduledOnlineAt?: string }).scheduledOnlineAt || '—'
+        }}</el-descriptions-item>
+        <el-descriptions-item label="计划下线">{{
+          (detail as PartyContent & { scheduledOfflineAt?: string }).scheduledOfflineAt || '—'
+        }}</el-descriptions-item>
         ></el-descriptions
       >
+      <div v-if="Object.keys(contentImpact).length" class="impact-summary">
+        <el-tag>关联专题 {{ contentImpact.topicCount || 0 }}</el-tag
+        ><el-tag>收藏 {{ contentImpact.favorites || 0 }}</el-tag>
+        <el-tag>阅读 {{ contentImpact.readers || 0 }}</el-tag
+        ><el-tag>检索分块 {{ contentImpact.citations || 0 }}</el-tag>
+      </div>
       <div class="governance-preview">
         <p v-for="(section, index) in detail.sections" :key="String(section.chunk_id ?? index)">
           {{ section.content }}
@@ -587,3 +713,38 @@ watch(
         :total="detail.versions?.length || 0" /></template
   ></el-dialog>
 </template>
+<style scoped>
+.governance-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 16px;
+}
+
+.signal {
+  min-width: 92px;
+  padding: 8px 10px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+}
+
+.signal span {
+  display: block;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.signal strong {
+  font-size: 19px;
+  line-height: 1.3;
+}
+
+.impact-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+</style>

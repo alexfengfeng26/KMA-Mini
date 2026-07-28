@@ -2,6 +2,8 @@ package com.kma.knowledge.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kma.common.security.KmaIdentityContext;
+import com.kma.common.security.KmaPrincipal;
+import com.kma.common.security.AuthorizationStateService;
 import com.kma.common.security.ContentSecurityService;
 import com.kma.knowledge.client.llm.LlmChatRequest;
 import com.kma.knowledge.client.llm.LlmClient;
@@ -59,6 +61,7 @@ public class KnowledgeStreamQAServiceImpl implements KnowledgeStreamQAService {
     private final ScheduledExecutorService kmaSseHeartbeatScheduler;
     private final ContentSecurityService contentSecurity;
     private final CitationSecurityService citationSecurity;
+    private final AuthorizationStateService authorizationStateService;
 
     @Autowired
     public KnowledgeStreamQAServiceImpl(KnowledgeSpaceMapper spaceMapper, PromptAssembler promptAssembler,
@@ -66,12 +69,13 @@ public class KnowledgeStreamQAServiceImpl implements KnowledgeStreamQAService {
         KnowledgeChatSessionService chatSessionService, KnowledgeSpaceAclService aclService,
         RagMetricsRecorder metricsRecorder, ObjectMapper objectMapper, Executor kmaSseExecutor,
         ScheduledExecutorService kmaSseHeartbeatScheduler, ContentSecurityService contentSecurity,
-        CitationSecurityService citationSecurity) {
+        CitationSecurityService citationSecurity, AuthorizationStateService authorizationStateService) {
         this.spaceMapper=spaceMapper;this.promptAssembler=promptAssembler;this.llmClientFactory=llmClientFactory;
         this.properties=properties;this.retrieveService=retrieveService;this.chatSessionService=chatSessionService;
         this.aclService=aclService;this.metricsRecorder=metricsRecorder;this.objectMapper=objectMapper;
         this.kmaSseExecutor=kmaSseExecutor;this.kmaSseHeartbeatScheduler=kmaSseHeartbeatScheduler;
         this.contentSecurity=contentSecurity;this.citationSecurity=citationSecurity;
+        this.authorizationStateService=authorizationStateService;
     }
 
     public KnowledgeStreamQAServiceImpl(KnowledgeSpaceMapper spaceMapper, PromptAssembler promptAssembler,
@@ -80,12 +84,13 @@ public class KnowledgeStreamQAServiceImpl implements KnowledgeStreamQAService {
         RagMetricsRecorder metricsRecorder, ObjectMapper objectMapper, Executor kmaSseExecutor,
         ScheduledExecutorService kmaSseHeartbeatScheduler) {
         this(spaceMapper,promptAssembler,llmClientFactory,properties,retrieveService,chatSessionService,aclService,
-            metricsRecorder,objectMapper,kmaSseExecutor,kmaSseHeartbeatScheduler,null,null);
+            metricsRecorder,objectMapper,kmaSseExecutor,kmaSseHeartbeatScheduler,null,null,null);
     }
 
     @Override
     public void streamAnswer(QARequest request, SseEmitter emitter) {
         AtomicBoolean cancelled = new AtomicBoolean(false);
+        KmaPrincipal streamPrincipal = KmaIdentityContext.getLoginUser();
         emitter.onCompletion(() -> cancelled.set(true));
         emitter.onTimeout(() -> cancelled.set(true));
         emitter.onError(error -> cancelled.set(true));
@@ -94,9 +99,16 @@ public class KnowledgeStreamQAServiceImpl implements KnowledgeStreamQAService {
                 return;
             }
             try {
+                assertStreamAuthorization(request.getSpaceCode(), streamPrincipal);
                 emitter.send(SseEmitter.event().name("heartbeat").data("ok"));
-            } catch (IOException ex) {
+            } catch (Exception ex) {
                 cancelled.set(true);
+                try {
+                    emitter.send(SseEmitter.event().name("error").data("AUTHORIZATION_REVOKED"));
+                } catch (IOException ignored) {
+                    // The client has already disconnected.
+                }
+                emitter.complete();
             }
         }, 15, 15, TimeUnit.SECONDS);
 
@@ -106,6 +118,7 @@ public class KnowledgeStreamQAServiceImpl implements KnowledgeStreamQAService {
             String status = "success";
             String errorMessage = null;
             try {
+                assertStreamAuthorization(spaceCode, streamPrincipal);
                 ContentSecurityService.Inspection inputInspection = contentSecurity == null
                     ? new ContentSecurityService.Inspection(request.getQuery(), List.of(), false)
                     : contentSecurity.inspectUserInput(request.getQuery(), "space:" + spaceCode);
@@ -133,6 +146,7 @@ public class KnowledgeStreamQAServiceImpl implements KnowledgeStreamQAService {
 
                 // 在引用和 Prompt 对外发送前二次复核，覆盖检索期间 ACL 被撤销的竞态窗口。
                 aclService.assertReadAccess(spaceCode);
+                assertStreamAuthorization(spaceCode, streamPrincipal);
                 if (citationSecurity != null) citationSecurity.verifyAndSanitize(spaceCode, hits,
                     Boolean.TRUE.equals(request.getPortalOnly()));
 
@@ -169,6 +183,7 @@ public class KnowledgeStreamQAServiceImpl implements KnowledgeStreamQAService {
                     if (cancelled.get()) {
                         throw new CancellationException("SSE client disconnected");
                     }
+                    assertStreamAuthorization(spaceCode, streamPrincipal);
                     String safeChunk = contentSecurity == null ? chunk
                         : contentSecurity.processModelOutput(chunk, "space:" + spaceCode).sanitized();
                     answerBuilder.append(safeChunk);
@@ -216,6 +231,14 @@ public class KnowledgeStreamQAServiceImpl implements KnowledgeStreamQAService {
                 }
             }
         });
+    }
+
+    private void assertStreamAuthorization(String spaceCode, KmaPrincipal principal) {
+        // The legacy constructor is retained for focused unit tests and does not have a DB-backed guard.
+        if (authorizationStateService == null) return;
+        authorizationStateService.assertCurrent(principal);
+        if (!aclService.hasReadAccess(spaceCode, principal))
+            throw new com.kma.common.exception.KmaException(401, "AUTHORIZATION_REVOKED");
     }
 }
 

@@ -3,4 +3,12 @@
   <h1>专题目录</h1>
   <p class="page-sub">围绕治理场景组织的结构化知识地图。</p>
 </header>
-<kma-widget name="topic-directory" />
+<div class="topic-row-grid">
+  {% for topic in topics %}
+  <button type="button" class="topic-row" data-kma-topic="{{ topic.topicCode }}">
+    <strong>{{ topic.name }}</strong>
+    <span>{{ topic.description | truncate: 60 }}</span>
+    <i>进入专题 →</i>
+  </button>
+  {% endfor %}
+</div>

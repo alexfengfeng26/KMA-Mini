@@ -3,4 +3,19 @@
   <h1>搜索结果</h1>
   <p class="page-sub">与当前检索条件匹配的资料。</p>
 </header>
-<kma-widget name="content-list" />
+<ol class="bulletin-list">
+  {% for item in recent %}
+  <li class="bulletin-row">
+    <div class="bulletin-body">
+      <h3>{{ item.title }}</h3>
+      <p>{{ item.summary | truncate: 88 }}</p>
+      <div class="bulletin-meta">
+        <span>{{ item.issuingAuthority }}</span>
+        {% if item.documentNumber %}<span>{{ item.documentNumber }}</span>{% endif %}
+        <time>{{ item.publishDate }}</time>
+      </div>
+    </div>
+    <button type="button" data-kma-content="{{ item.contentId }}">查阅</button>
+  </li>
+  {% endfor %}
+</ol>

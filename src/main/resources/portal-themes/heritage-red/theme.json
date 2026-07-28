@@ -1,7 +1,7 @@
 {
   "themeKey": "heritage-red",
   "displayName": "党建典藏红",
-  "description": "朱砂红与暖白纸感的党建知识门户",
+  "description": "杂志编辑式党建学习门户：头条特写、编号专题与金句横幅",
   "kind": "portal-theme",
   "entry": "layout.html",
   "capabilities": ["page-context", "contents", "search", "ask", "analytics", "navigation"],

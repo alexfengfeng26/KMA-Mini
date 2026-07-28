@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /** Create/update payload for publication-managed party knowledge content. */
@@ -33,6 +34,9 @@ public class PartyContentRequest {
     private LocalDate publishDate;
     private LocalDate effectiveDate;
     private LocalDate expiryDate;
+    private LocalDateTime scheduledOnlineAt;
+    private LocalDateTime scheduledOfflineAt;
+    @Size(max = 1000) private String scheduleNote;
     @NotBlank @Pattern(regexp = "effective|pending|expired|repealed|unknown")
     private String validityStatus;
     @Size(max = 2000)

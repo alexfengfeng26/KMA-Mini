@@ -42,6 +42,8 @@ describe('Portal Theme V4 runtime', () => {
     expect(document).toContain('&lt;img src=x&gt;')
     expect(document).toContain('<h1>首页</h1>')
     expect(document).toContain("connect-src 'none'")
+    expect(document).toContain('event.preventDefault()')
+    expect(document).toContain('let navigationPending = false')
     expect(document).not.toContain('<script>unsafe</script>')
   })
 

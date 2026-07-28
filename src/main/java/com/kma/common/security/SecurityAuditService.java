@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import com.kma.common.security.dto.SecurityAuditQuery;
 
 @Service
 @Slf4j
@@ -113,6 +115,56 @@ public class SecurityAuditService {
             """.formatted(orderColumn, direction), normalizedKeyword, pattern, pattern, pattern, pattern,
             pageSize, (pageNum - 1) * pageSize);
         return new PageResult<>(rows, total == null ? 0 : total, pageNum, pageSize);
+    }
+
+    /** Permission, ACL and publication changes with structured filters for governance review. */
+    public PageResult<Map<String, Object>> governancePage(SecurityAuditQuery query) {
+        List<Object> args = new ArrayList<>();
+        StringBuilder where = new StringBuilder(" WHERE event_type IN ('identity_change','role_change',"
+            + "'organization_change','organization_membership_change','space_authorization_change',"
+            + "'token_revocation','portal_theme','content_workflow','content_change')");
+        like(where, args, "username", query.getUsername());
+        like(where, args, "resource", query.getResource());
+        like(where, args, "event_type", query.getEventType());
+        like(where, args, "action", query.getAction());
+        if (query.getFrom() != null) { where.append(" AND create_time>=?"); args.add(query.getFrom()); }
+        if (query.getTo() != null) { where.append(" AND create_time<=?"); args.add(query.getTo()); }
+        Long total = jdbc.queryForObject("SELECT count(*) FROM kma_security_audit" + where, Long.class, args.toArray());
+        List<Object> page = new ArrayList<>(args);
+        page.add(query.getPageSize());
+        page.add((query.getPageNum() - 1) * query.getPageSize());
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+            SELECT audit_id AS "auditId",subject_id AS "subjectId",username,event_type AS "eventType",severity,
+                   action,resource,details,trace_id AS "traceId",target_type AS "targetType",target_id AS "targetId",
+                   before_state AS "beforeState",after_state AS "afterState",create_time AS "createTime"
+            FROM kma_security_audit
+            """ + where + " ORDER BY create_time DESC,audit_id DESC LIMIT ? OFFSET ?", page.toArray());
+        return new PageResult<>(rows, total == null ? 0 : total, query.getPageNum(), query.getPageSize());
+    }
+
+    public Map<String, Object> governanceSummary(int days) {
+        int bounded = Math.max(1, Math.min(days, 90));
+        List<Map<String, Object>> byType = jdbc.queryForList("""
+            SELECT event_type AS "eventType",count(*) AS total
+            FROM kma_security_audit WHERE create_time>=now()-(? || ' days')::interval
+              AND event_type IN ('identity_change','role_change','organization_change',
+                'organization_membership_change','space_authorization_change','token_revocation','portal_theme')
+            GROUP BY event_type ORDER BY total DESC
+            """, bounded);
+        List<Map<String, Object>> recent = jdbc.queryForList("""
+            SELECT action,resource,username,severity,create_time AS "createTime"
+            FROM kma_security_audit WHERE create_time>=now()-(? || ' days')::interval
+              AND event_type IN ('identity_change','role_change','organization_change',
+                'organization_membership_change','space_authorization_change','token_revocation','portal_theme')
+            ORDER BY create_time DESC LIMIT 10
+            """, bounded);
+        return Map.of("days", bounded, "byType", byType, "recent", recent);
+    }
+
+    private void like(StringBuilder where, List<Object> args, String column, String value) {
+        if (value == null || value.isBlank()) return;
+        where.append(" AND COALESCE(").append(column).append(",'') ILIKE ?");
+        args.add("%" + value.trim() + "%");
     }
 
     private String[] target(String resource) {

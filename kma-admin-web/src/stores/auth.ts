@@ -31,8 +31,22 @@ export const useAuthStore = defineStore('auth', () => {
   window.addEventListener('kma-auth-refreshed', (event) => {
     const detail = (event as CustomEvent<UserInfo>).detail
     if (detail) {
+      const previous = user.value
+      const authorizationChanged =
+        Boolean(previous) &&
+        (previous?.authorizationVersion !== detail.authorizationVersion ||
+          JSON.stringify([...(previous?.permissions || [])].sort()) !==
+            JSON.stringify([...(detail.permissions || [])].sort()) ||
+          JSON.stringify([...(previous?.organizationCodes || [])].sort()) !==
+            JSON.stringify([...(detail.organizationCodes || [])].sort()))
       accessToken.value = sessionStorage.getItem('kma_access_token') || ''
       applyUser(detail)
+      if (authorizationChanged)
+        window.dispatchEvent(
+          new CustomEvent('kma-authorization-changed', {
+            detail: { previous, current: detail },
+          }),
+        )
     }
   })
   window.addEventListener('kma-auth-cleared', () => {

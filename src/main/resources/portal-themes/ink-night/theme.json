@@ -1,7 +1,7 @@
 {
   "themeKey": "ink-night",
   "displayName": "墨玉夜读",
-  "description": "面向沉浸阅读的墨玉深色知识主题",
+  "description": "个人书房式沉浸阅读主题：继续阅读、专题书架与极简列表",
   "kind": "portal-theme",
   "entry": "layout.html",
   "capabilities": ["page-context", "contents", "search", "ask", "analytics", "navigation"],

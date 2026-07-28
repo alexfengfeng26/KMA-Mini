@@ -10,7 +10,7 @@ import java.util.Map;
 @Data
 public class PortalEventRequest {
     @NotBlank
-    @Pattern(regexp = "page_view|search|search_empty|article_click|ai_ask|feedback")
+    @Pattern(regexp = "page_view|search|search_empty|article_click|ai_ask|feedback|topic_click|favorite|reading_complete")
     private String eventType;
 
     @Size(max = 64)

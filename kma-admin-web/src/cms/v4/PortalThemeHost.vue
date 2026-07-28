@@ -19,6 +19,7 @@ const auth = useAuthStore()
 const frame = ref<HTMLIFrameElement>()
 const currentContent = ref<unknown>()
 let port: MessagePort | undefined
+let navigationInFlight = ''
 const capabilities = computed(
   () => new Set(props.bootstrap.themeRuntime?.manifest.capabilities || ['page-context']),
 )
@@ -98,9 +99,18 @@ async function handleRequest(event: MessageEvent<{ id?: string; type?: string; p
       )
     } else if (type === 'portal.navigation.go' || type === 'portal.navigation.replace') {
       const path = portalPath(String(payload || 'home').slice(0, 180))
-      if (type.endsWith('replace')) await router.replace(path)
-      else await router.push(path)
-      respond(id, true, { path: route.fullPath })
+      if (navigationInFlight === path || route.fullPath === path) {
+        respond(id, true, { path })
+        return
+      }
+      navigationInFlight = path
+      try {
+        if (type.endsWith('replace')) await router.replace(path)
+        else await router.push(path)
+        respond(id, true, { path: route.fullPath })
+      } finally {
+        navigationInFlight = ''
+      }
     } else if (type === 'portal.navigation.back') {
       router.back()
       respond(id, true, { back: true })
@@ -122,10 +132,40 @@ async function handleRequest(event: MessageEvent<{ id?: string; type?: string; p
       )
       respond(id, true, { opened: true })
     } else if (type === 'portal.analytics.track') {
+      const tracked = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
+      const eventType = [
+        'page_view',
+        'search',
+        'search_empty',
+        'article_click',
+        'ai_ask',
+        'feedback',
+        'topic_click',
+        'favorite',
+        'reading_complete',
+      ].includes(String(tracked.eventType))
+        ? (String(tracked.eventType) as
+            | 'page_view'
+            | 'search'
+            | 'search_empty'
+            | 'article_click'
+            | 'ai_ask'
+            | 'feedback'
+            | 'topic_click'
+            | 'favorite'
+            | 'reading_complete')
+        : 'page_view'
       await recordPortalEvent(props.bootstrap.site.siteKey, {
-        eventType: 'page_view',
-        pageSlug: props.bootstrap.page.slug,
-        metadata: { source: 'theme-v4' },
+        eventType,
+        pageSlug: String(tracked.pageSlug || props.bootstrap.page.slug).slice(0, 64),
+        queryText: String(tracked.queryText || '').slice(0, 500) || undefined,
+        targetId: String(tracked.targetId || '').slice(0, 128) || undefined,
+        metadata: {
+          source: 'theme-v4',
+          ...(tracked.metadata && typeof tracked.metadata === 'object'
+            ? (tracked.metadata as Record<string, unknown>)
+            : {}),
+        },
       })
       respond(id, true, { recorded: true })
     } else respond(id, false, { code: 'SDK_CAPABILITY_FORBIDDEN' })

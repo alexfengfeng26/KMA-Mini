@@ -261,6 +261,23 @@ export function applyContentAction(
   })
 }
 
+export function submitQaFeedback(body: {
+  rating: 'helpful' | 'unhelpful'
+  reason?: string
+  comment?: string
+  spaceCode?: string
+  sessionId?: number
+  question?: string
+  answerExcerpt?: string
+  citationRefs?: string[]
+}) {
+  return authorizedJson<number>('/api/v1/portal/qa-feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
 export function createTopic(body: TopicRequest) {
   return unwrap(api.POST('/api/v1/admin/topics', { body }))
 }

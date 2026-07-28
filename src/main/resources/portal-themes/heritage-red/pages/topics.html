@@ -3,4 +3,12 @@
   <h1>专题目录</h1>
   <p class="page-sub">按主题组织的学习脉络，循序深入。</p>
 </header>
-<kma-widget name="topic-directory" />
+<div class="study-list">
+  {% for topic in topics %}
+  <article class="study-item">
+    <h3>{{ topic.name }}</h3>
+    <p>{{ topic.description | truncate: 88 }}</p>
+    <button type="button" data-kma-topic="{{ topic.topicCode }}">进入学习</button>
+  </article>
+  {% endfor %}
+</div>

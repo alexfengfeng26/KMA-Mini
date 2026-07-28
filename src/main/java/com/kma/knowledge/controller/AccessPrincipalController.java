@@ -30,4 +30,12 @@ public class AccessPrincipalController {
         @RequestParam(defaultValue = "") String keyword) {
         return ApiResult.success(validator.list(type, keyword));
     }
+
+    @GetMapping("/impact")
+    @PreAuthorize("@ss.hasPermi('space:acl:manage')")
+    public ApiResult<Map<String, Object>> impact(
+        @RequestParam @Pattern(regexp = "user|role|org") String type,
+        @RequestParam String value) {
+        return ApiResult.success(validator.impact(type, value));
+    }
 }

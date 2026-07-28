@@ -52,6 +52,7 @@ public class PartyKnowledgeService {
         markGoverned(created.getDocId(), request.getTitle(), request.getContentType(), request.getDocumentNumber(),
             request.getIssuingAuthority(), request.getPublishDate(), request.getEffectiveDate(), request.getExpiryDate(),
             request.getValidityStatus(), request.getSummary(), request.getKeywords(), request.getTopicCodes());
+        applySchedule(created.getDocId(), request.getScheduledOnlineAt(), request.getScheduledOfflineAt(), request.getScheduleNote());
         auditService.recordRequired("content_change", "info", "content.create", "content:" + created.getDocId(),
             Map.of(), Map.of("workflowStatus", "draft", "title", request.getTitle()), Map.of("source", "text"));
         return getAdminContent(created.getDocId());
@@ -68,6 +69,7 @@ public class PartyKnowledgeService {
         markGoverned(created.getDocId(), request.getTitle(), request.getContentType(), request.getDocumentNumber(),
             request.getIssuingAuthority(), request.getPublishDate(), request.getEffectiveDate(), request.getExpiryDate(),
             request.getValidityStatus(), request.getSummary(), request.getKeywords(), request.getTopicCodes());
+        applySchedule(created.getDocId(), request.getScheduledOnlineAt(), request.getScheduledOfflineAt(), request.getScheduleNote());
         auditService.recordRequired("content_change", "info", "content.create", "content:" + created.getDocId(),
             Map.of(), Map.of("workflowStatus", "draft", "title", request.getTitle()), Map.of("source", "file"));
         return getAdminContent(created.getDocId());
@@ -89,6 +91,9 @@ public class PartyKnowledgeService {
             request.getPublishDate(), request.getEffectiveDate(), request.getExpiryDate(), request.getValidityStatus(),
             request.getSummary(), json(request.getKeywords() == null ? keywords(doc.getKeywords()) : request.getKeywords()),
             id);
+        if (request.getScheduledOnlineAt() != null || request.getScheduledOfflineAt() != null || request.getScheduleNote() != null) {
+            applySchedule(id, request.getScheduledOnlineAt(), request.getScheduledOfflineAt(), request.getScheduleNote());
+        }
         if (request.getTopicCodes() != null) assignTopics(id, request.getTopicCodes());
         PartyContentView updated = getAdminContent(id);
         auditService.recordRequired("content_change", "info", "content.update", "content:" + id,
@@ -115,6 +120,7 @@ public class PartyKnowledgeService {
     public void approve(Long id, ReviewRequest request) {
         KnowledgeDoc doc = lockManaged(id);
         aclService.assertAdminAccess(requireSpace(doc).getSpaceCode());
+        assertSeparationOfDuties(doc, "review");
         if (!"reviewing".equals(doc.getWorkflowStatus())) throw new KmaException(409, "CONTENT_NOT_REVIEWING");
         knowledgeJdbcTemplate.update("""
             UPDATE knowledge_doc SET review_decision='approved',review_note=?,reviewer_id=?,reviewed_at=now(),update_time=now()
@@ -143,6 +149,7 @@ public class PartyKnowledgeService {
     public void publish(Long id) {
         KnowledgeDoc doc = lockManaged(id);
         aclService.assertAdminAccess(requireSpace(doc).getSpaceCode());
+        assertSeparationOfDuties(doc, "publish");
         boolean restore = "published".equals(doc.getWorkflowStatus()) && !Boolean.TRUE.equals(doc.getOnline());
         if (!restore && (!"reviewing".equals(doc.getWorkflowStatus()) || !"approved".equals(doc.getReviewDecision()))) {
             throw new KmaException(409, "CONTENT_REVIEW_APPROVAL_REQUIRED");
@@ -154,12 +161,14 @@ public class PartyKnowledgeService {
                 WHERE space_id=? AND external_ref=? AND doc_id<>? AND is_active=TRUE
                 """, doc.getSpaceId(), doc.getExternalRef(), id);
         }
+        boolean scheduled = doc.getScheduledOnlineAt() != null && doc.getScheduledOnlineAt().isAfter(LocalDateTime.now());
         knowledgeJdbcTemplate.update("""
-            UPDATE knowledge_doc SET workflow_status='published',online=TRUE,is_active=TRUE,published_at=now(),
-              activated_at=now(),update_time=now() WHERE doc_id=?
-            """, id);
-        auditService.recordRequired("content_workflow", "warning", restore ? "content.restore" : "content.publish",
-            "content:" + id, snapshot(doc), Map.of("workflowStatus", "published", "online", true, "active", true), Map.of());
+            UPDATE knowledge_doc SET workflow_status='published',online=?,is_active=?,published_at=now(),
+              activated_at=CASE WHEN ? THEN NULL ELSE now() END,update_time=now() WHERE doc_id=?
+            """, !scheduled, !scheduled, scheduled, id);
+        auditService.recordRequired("content_workflow", "warning", scheduled ? "content.schedule.online" : (restore ? "content.restore" : "content.publish"),
+            "content:" + id, snapshot(doc), Map.of("workflowStatus", "published", "online", !scheduled, "active", !scheduled),
+            scheduled ? Map.of("scheduledOnlineAt", doc.getScheduledOnlineAt().toString()) : Map.of());
     }
 
     @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
@@ -421,10 +430,10 @@ public class PartyKnowledgeService {
         knowledgeJdbcTemplate.update("""
             UPDATE knowledge_doc SET title=?,publication_managed=TRUE,content_type=?,document_number=?,issuing_authority=?,
               publish_date=?,effective_date=?,expiry_date=?,validity_status=?,workflow_status='draft',review_decision=NULL,
-              online=FALSE,is_active=FALSE,summary=?,keywords=?::jsonb,update_time=now()
+              online=FALSE,is_active=FALSE,summary=?,keywords=?::jsonb,created_by=COALESCE(created_by,?),update_time=now()
             WHERE doc_id=?
             """,title,contentType,number,authority,publishDate,effectiveDate,expiryDate,validity,summary,
-            json(keywords),id);
+            json(keywords),KmaIdentityContext.getUserId(),id);
         assignTopics(id,topics);
     }
 
@@ -451,7 +460,8 @@ public class PartyKnowledgeService {
     private String selectColumns(){return """
         SELECT d.doc_id,d.space_id,s.space_code,s.name space_name,d.title,d.source_tag,d.external_ref,d.source_version,
           d.is_active,d.parse_status,d.mime_type,d.content_type,d.document_number,d.issuing_authority,d.publish_date,
-          d.effective_date,d.expiry_date,d.validity_status,d.workflow_status,d.review_decision,d.review_note,d.online,
+          d.effective_date,d.expiry_date,d.scheduled_online_at,d.scheduled_offline_at,d.schedule_note,d.created_by,
+          d.validity_status,d.workflow_status,d.review_decision,d.review_note,d.online,
           d.summary,d.keywords,d.reviewer_id,d.submitted_at,d.reviewed_at,d.published_at,d.create_time,d.update_time
         """;}
 
@@ -461,7 +471,9 @@ public class PartyKnowledgeService {
         v.setTitle(rs.getString("title"));v.setSourceTag(rs.getString("source_tag"));v.setExternalRef(rs.getString("external_ref"));v.setSourceVersion(rs.getLong("source_version"));
         v.setActive(rs.getBoolean("is_active"));v.setParseStatus(rs.getString("parse_status"));v.setMimeType(rs.getString("mime_type"));v.setContentType(rs.getString("content_type"));
         v.setDocumentNumber(rs.getString("document_number"));v.setIssuingAuthority(rs.getString("issuing_authority"));v.setPublishDate(localDate(rs.getObject("publish_date")));
-        v.setEffectiveDate(localDate(rs.getObject("effective_date")));v.setExpiryDate(localDate(rs.getObject("expiry_date")));v.setValidityStatus(rs.getString("validity_status"));
+        v.setEffectiveDate(localDate(rs.getObject("effective_date")));v.setExpiryDate(localDate(rs.getObject("expiry_date")));
+        v.setScheduledOnlineAt(localDateTime(rs.getObject("scheduled_online_at")));v.setScheduledOfflineAt(localDateTime(rs.getObject("scheduled_offline_at")));
+        v.setScheduleNote(rs.getString("schedule_note"));v.setCreatedBy((Long)rs.getObject("created_by"));v.setValidityStatus(rs.getString("validity_status"));
         v.setWorkflowStatus(rs.getString("workflow_status"));v.setReviewDecision(rs.getString("review_decision"));v.setReviewNote(rs.getString("review_note"));v.setOnline(rs.getBoolean("online"));
         v.setSummary(rs.getString("summary"));v.setKeywords(keywords(String.valueOf(rs.getObject("keywords"))));v.setReviewerId((Long)rs.getObject("reviewer_id"));
         v.setSubmittedAt(localDateTime(rs.getObject("submitted_at")));v.setReviewedAt(localDateTime(rs.getObject("reviewed_at")));v.setPublishedAt(localDateTime(rs.getObject("published_at")));
@@ -554,7 +566,16 @@ public class PartyKnowledgeService {
     private KnowledgeSpace requireSpace(KnowledgeDoc d){KnowledgeSpace s=spaceMapper.selectById(d.getSpaceId());if(s==null)throw new KmaException(404,"SPACE_NOT_FOUND");return s;}
     private Long requireUser(){Long id=KmaIdentityContext.getUserId();if(id==null)throw new KmaException(403,"USER_IDENTITY_REQUIRED");return id;}
     private String externalRef(String value){return StringUtils.hasText(value)?value:"party-content:"+UUID.randomUUID();}
-    private String portalVisibility(String a){return a+".publication_managed=TRUE AND "+a+".workflow_status='published' AND "+a+".online=TRUE AND "+a+".is_active=TRUE AND "+a+".parse_status='completed' AND ("+a+".validity_status='pending' OR "+a+".effective_date IS NULL OR "+a+".effective_date<=CURRENT_DATE) AND ("+a+".expiry_date IS NULL OR "+a+".expiry_date>=CURRENT_DATE OR "+a+".validity_status IN ('expired','repealed'))";}
+    private String portalVisibility(String a){return a+".publication_managed=TRUE AND "+a+".workflow_status='published' AND "+a+".online=TRUE AND "+a+".is_active=TRUE AND "+a+".parse_status='completed' AND ("+a+".scheduled_online_at IS NULL OR "+a+".scheduled_online_at<=now()) AND ("+a+".scheduled_offline_at IS NULL OR "+a+".scheduled_offline_at>now()) AND "+a+".validity_status NOT IN ('expired','repealed') AND ("+a+".effective_date IS NULL OR "+a+".effective_date<=CURRENT_DATE) AND ("+a+".expiry_date IS NULL OR "+a+".expiry_date>=CURRENT_DATE)";}
+    private void applySchedule(Long id, LocalDateTime onlineAt, LocalDateTime offlineAt, String note){
+        if(onlineAt!=null&&offlineAt!=null&&!offlineAt.isAfter(onlineAt))throw new KmaException(400,"CONTENT_SCHEDULE_WINDOW_INVALID");
+        knowledgeJdbcTemplate.update("UPDATE knowledge_doc SET scheduled_online_at=?,scheduled_offline_at=?,schedule_note=?,update_time=now() WHERE doc_id=?",onlineAt,offlineAt,note,id);
+    }
+    private void assertSeparationOfDuties(KnowledgeDoc doc,String stage){
+        Boolean enabled=knowledgeJdbcTemplate.queryForObject("SELECT content_separation_of_duties FROM kma_governance_policy WHERE policy_key='default'",Boolean.class);
+        Long actor=KmaIdentityContext.getUserId();
+        if(Boolean.TRUE.equals(enabled)&&actor!=null&&actor.equals(doc.getCreatedBy()))throw new KmaException(409,"CONTENT_SEPARATION_OF_DUTIES_REQUIRED: "+stage);
+    }
     private void readableSpaces(StringBuilder where,List<Object> args,String alias){Set<Long> ids=aclService.getReadableSpaceIds();if(ids==null)return;if(ids.isEmpty()){where.append(" AND 1=0");return;}where.append(" AND ").append(alias).append(".space_id IN (").append(String.join(",",Collections.nCopies(ids.size(),"?"))).append(')');args.addAll(ids);}
     private void eq(StringBuilder where,List<Object> args,String field,String value){if(StringUtils.hasText(value)){where.append(" AND ").append(field).append("=?");args.add(value);}}
     private Map<String,Object> page(List<?> list,long total,int pageNum,int pageSize){Map<String,Object> m=new LinkedHashMap<>();m.put("list",list);m.put("total",total);m.put("pageNum",pageNum);m.put("pageSize",pageSize);return m;}

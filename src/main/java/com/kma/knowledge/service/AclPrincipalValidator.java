@@ -64,6 +64,39 @@ public class AclPrincipalValidator {
         };
     }
 
+    /**
+     * Estimates who will gain or lose access before an ACL entry is changed.
+     * It is deliberately calculated from the live identity tables: the browser
+     * never receives a cached ACL scope that could become stale after a change.
+     */
+    public Map<String, Object> impact(String type, String value) {
+        validate(type, value);
+        long affectedUsers = switch (type) {
+            case "user" -> 1L;
+            case "role" -> count("""
+                SELECT count(DISTINCT ur.user_id) FROM kma_user_role ur
+                JOIN kma_role r ON r.role_id=ur.role_id
+                JOIN kma_user u ON u.user_id=ur.user_id
+                WHERE r.role_code=? AND r.status='active' AND u.status='active'
+                """, value);
+            case "org" -> count("""
+                SELECT count(DISTINCT uo.user_id) FROM kma_org root
+                JOIN kma_org_closure c ON c.ancestor_id=root.org_id
+                JOIN kma_user_org uo ON uo.org_id=c.descendant_id
+                JOIN kma_user u ON u.user_id=uo.user_id
+                WHERE root.org_code=? AND root.status='active' AND u.status='active'
+                """, value);
+            default -> throw new KmaException(400, "不支持的 ACL 主体类型");
+        };
+        long matchingAclEntries = count("""
+            SELECT count(*) FROM knowledge_space_acl
+            WHERE principal_type=? AND principal_value=?
+            """, type, value);
+        return Map.of("principalType", type, "principalValue", value,
+            "affectedUsers", affectedUsers, "existingAclEntries", matchingAclEntries,
+            "calculatedAt", java.time.OffsetDateTime.now().toString());
+    }
+
     public SpaceAclView toView(KnowledgeSpaceAcl acl) {
         PrincipalStatus status = principalStatus(acl.getPrincipalType(), acl.getPrincipalValue());
         return new SpaceAclView(acl.getAclId(), acl.getSpaceId(), acl.getPrincipalType(), acl.getPrincipalValue(),
@@ -104,6 +137,11 @@ public class AclPrincipalValidator {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("type", type); item.put("value", value); item.put("label", label); item.put("secondary", secondary);
         return item;
+    }
+
+    private long count(String sql, Object... args) {
+        Long value = jdbc.queryForObject(sql, Long.class, args);
+        return value == null ? 0L : value;
     }
 
     private record PrincipalStatus(String status, boolean effective, String reason) {}

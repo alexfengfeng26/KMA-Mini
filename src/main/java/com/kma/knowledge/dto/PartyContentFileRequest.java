@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /** Multipart form metadata for a publication-managed source file. */
@@ -24,6 +25,9 @@ public class PartyContentFileRequest {
     @NotNull private LocalDate publishDate;
     private LocalDate effectiveDate;
     private LocalDate expiryDate;
+    private LocalDateTime scheduledOnlineAt;
+    private LocalDateTime scheduledOfflineAt;
+    @Size(max = 1000) private String scheduleNote;
     @NotBlank @Pattern(regexp = "effective|pending|expired|repealed|unknown")
     private String validityStatus;
     @Size(max = 2000) private String summary;

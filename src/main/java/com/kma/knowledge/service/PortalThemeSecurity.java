@@ -36,6 +36,8 @@ final class PortalThemeSecurity {
         "\\{%\\s*([a-z]+)\\b[^%]*%}", Pattern.CASE_INSENSITIVE);
     private static final Pattern MODULE_IMPORT = Pattern.compile(
         "\\b(?:import|export)\\s+(?:[^'\"]*?\\s+from\\s+)?['\"]([^'\"]+)['\"]");
+    private static final Pattern SDK_CAPABILITY = Pattern.compile(
+        "\\bportal\\.(context|contents|data|search|ask|analytics|navigation)\\s*\\.", Pattern.CASE_INSENSITIVE);
 
     private PortalThemeSecurity() {}
 
@@ -62,6 +64,7 @@ final class PortalThemeSecurity {
         for (String required : List.of("layout.html", "pages/home.html", "styles/theme.css"))
             if (!files.containsKey(required)) issues.add("缺少必需文件: " + required);
         validateManifest(manifest, issues);
+        validateCapabilityContract(files, manifest, issues);
         detectIncludeCycles(files, issues);
         return List.copyOf(new java.util.LinkedHashSet<>(issues));
     }
@@ -132,6 +135,33 @@ final class PortalThemeSecurity {
                 if (!capability.isTextual() || !CAPABILITIES.contains(capability.asText()))
                     issues.add("主题请求了未授权能力");
         }
+    }
+
+    /** A theme must declare every Portal SDK capability it actually calls. */
+    private static void validateCapabilityContract(Map<String, String> files, JsonNode manifest, List<String> issues) {
+        Set<String> declared = new HashSet<>();
+        if (manifest != null && manifest.path("capabilities").isArray())
+            manifest.path("capabilities").forEach(node -> declared.add(node.asText()));
+        Set<String> required = new HashSet<>();
+        for (Map.Entry<String, String> file : files.entrySet()) {
+            String source = file.getValue() == null ? "" : file.getValue();
+            Matcher sdk = SDK_CAPABILITY.matcher(source);
+            while (sdk.find()) {
+                String group = sdk.group(1).toLowerCase(Locale.ROOT);
+                required.add("context".equals(group) ? "page-context" : "data".equals(group) ? "contents" : group);
+            }
+            if (file.getKey().endsWith(".html")) {
+                Matcher widget = WIDGET.matcher(source);
+                while (widget.find()) {
+                    String name = widget.group(1);
+                    if (Set.of("content-list", "topic-directory", "document-reader", "favorite-list", "profile-card").contains(name))
+                        required.add("contents");
+                    if ("ai-chat".equals(name)) required.add("ask");
+                }
+            }
+        }
+        required.stream().filter(capability -> !declared.contains(capability)).sorted()
+            .forEach(capability -> issues.add("主题调用了未声明的 SDK 能力: " + capability));
     }
 
     private static void detectIncludeCycles(Map<String, String> files, List<String> issues) {

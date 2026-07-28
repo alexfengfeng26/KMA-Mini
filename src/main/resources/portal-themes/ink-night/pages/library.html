@@ -3,4 +3,13 @@
   <h1>阅览室</h1>
   <p class="page-sub">安静翻阅全部收录资料。</p>
 </header>
-<kma-widget name="content-list" />
+<ul class="quiet-list quiet-list-roomy">
+  {% for item in recent %}
+  <li>
+    <button type="button" data-kma-content="{{ item.contentId }}">
+      <strong>{{ item.title }}</strong>
+      <em>{{ item.issuingAuthority }} · {{ item.publishDate }}</em>
+    </button>
+  </li>
+  {% endfor %}
+</ul>

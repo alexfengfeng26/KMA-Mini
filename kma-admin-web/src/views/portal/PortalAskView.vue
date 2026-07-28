@@ -2,7 +2,8 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { useRoute, useRouter } from 'vue-router'
-import { getPortalTopics } from '../../api/party'
+import { getPortalTopics, submitQaFeedback } from '../../api/party'
+import { ElMessage } from 'element-plus'
 import { streamQa, type QaStreamEvent } from '../../api/sse'
 import { errorMessage } from '../../api/client'
 import PortalSystemPageFrame from '../../cms/v3/PortalSystemPageFrame.vue'
@@ -22,6 +23,7 @@ interface Citation {
   chunkIndex: number
   section?: string
   content: string
+  externalRef?: string
 }
 
 interface StreamingAnswer {
@@ -46,6 +48,7 @@ const form = reactive({
 })
 const answer = ref<StreamingAnswer>()
 const loading = ref(false)
+const feedback = ref<'helpful' | 'unhelpful'>()
 const error = ref('')
 const controller = ref<AbortController>()
 const topicsQuery = useQuery({
@@ -82,6 +85,7 @@ async function ask() {
   loading.value = true
   error.value = ''
   answer.value = { answer: '', citations: [], answered: true }
+  feedback.value = undefined
   controller.value = new AbortController()
   try {
     const siteKey = encodeURIComponent(getActivePortalSiteKey())
@@ -100,6 +104,29 @@ async function ask() {
   } finally {
     loading.value = false
     controller.value = undefined
+  }
+}
+
+async function rate(value: 'helpful' | 'unhelpful') {
+  if (!answer.value || feedback.value) return
+  try {
+    await submitQaFeedback({
+      rating: value,
+      spaceCode: form.spaceCode,
+      sessionId: form.sessionId,
+      question: form.query,
+      answerExcerpt: answer.value.answer.slice(0, 4000),
+      citationRefs: answer.value.citations
+        .map((item) => String(item.externalRef || ''))
+        .filter(Boolean)
+        .slice(0, 20),
+    })
+    feedback.value = value
+    ElMessage.success(
+      value === 'helpful' ? '感谢反馈，已记录为有效回答。' : '已记录问题，将进入知识质量改进队列。',
+    )
+  } catch (cause: unknown) {
+    ElMessage.error(errorMessage(cause, '反馈提交失败'))
   }
 }
 
@@ -220,6 +247,21 @@ onBeforeUnmount(() => {
             <p class="portal-answer-text">
               {{ answer.answer || (loading ? '正在生成…' : '未返回内容') }}
             </p>
+            <div v-if="!loading && answer.answer" class="portal-answer-feedback">
+              <span>这条回答是否解决了你的问题？</span>
+              <el-button
+                size="small"
+                :type="feedback === 'helpful' ? 'success' : 'default'"
+                @click="rate('helpful')"
+                >有帮助</el-button
+              >
+              <el-button
+                size="small"
+                :type="feedback === 'unhelpful' ? 'danger' : 'default'"
+                @click="rate('unhelpful')"
+                >需改进</el-button
+              >
+            </div>
             <section>
               <h2>
                 引用依据 <span>{{ answer.citations.length }}</span>

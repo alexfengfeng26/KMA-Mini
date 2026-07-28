@@ -369,7 +369,16 @@ export function createPortalDesignProposal(
 export function recordPortalEvent(
   siteKey: string,
   body: {
-    eventType: 'page_view' | 'search' | 'search_empty' | 'article_click' | 'ai_ask' | 'feedback'
+    eventType:
+      | 'page_view'
+      | 'search'
+      | 'search_empty'
+      | 'article_click'
+      | 'ai_ask'
+      | 'feedback'
+      | 'topic_click'
+      | 'favorite'
+      | 'reading_complete'
     pageSlug?: string
     queryText?: string
     targetId?: string

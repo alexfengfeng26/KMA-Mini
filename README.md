@@ -24,7 +24,7 @@ flowchart LR
   FE --> TK[Portal Theme V4\n隔离 iframe + Portal SDK]
   FE --> API[Spring Boot API\n认证、治理、RAG、CMS]
   TK -->|受控消息网关| FE
-  API --> DB[(PostgreSQL + pgvector\nFlyway V1-V23)]
+  API --> DB[(PostgreSQL + pgvector\nFlyway V1-V24)]
   API --> ST[本地存储 / MinIO]
   API --> MOD[Embedding / LLM / Reranker / OCR]
   WK[独立 Worker\n入库、重建、治理任务] --> DB
@@ -42,7 +42,7 @@ flowchart LR
 | 内容治理 | 内容草稿、审核、发布、下线、效力状态、专题、收藏、阅读历史与门户可见性 |
 | 知识处理 | 文件/文本入库、解析、分块、关键词、向量、版本化切换、任务租约、重试与死信 |
 | RAG | 中文词项分析、全文/向量召回、RRF 混合排序、可选重排、引用复核、无证据拒答、SSE 流式回答 |
-| 门户 CMS | Portal Theme V4 全站 HTML/Liquid/KMA 标签主题、隔离 JavaScript、Portal SDK、ZIP 导入导出、DeepSeek 多文件提案、草稿/审核/发布/回退 |
+| 门户 CMS | Portal Theme V4 全站 HTML/Liquid/KMA 标签主题、隔离 JavaScript、Portal SDK、主题目录、ZIP 导入导出、DeepSeek 多文件提案、真实预览、一键发布与历史回退 |
 | 运维 | 健康探针、Prometheus 指标、调用与安全审计、存储对账、模型 Profile、RAG 评测 |
 
 ## 技术栈
@@ -50,7 +50,7 @@ flowchart LR
 | 层级 | 主要技术 |
 | --- | --- |
 | 后端 | JDK 21、Spring Boot 3.5、Spring Security、JDBC、MyBatis-Plus、Flyway、Springdoc |
-| 数据 | PostgreSQL 16+、pgvector、Flyway V1–V23 |
+| 数据 | PostgreSQL 16+、pgvector、Flyway V1–V24 |
 | 文档处理 | PDFBox、Apache POI、可选 OCR、Local/MinIO Storage SPI |
 | 前端 | Vue 3、TypeScript、Vite、Element Plus、Pinia、Vue Router、TanStack Query |
 | 测试 | JUnit 5、Spring Security Test、Testcontainers、Vitest、Playwright |
@@ -107,7 +107,7 @@ createdb -U postgres kma_mini
 psql -U postgres -d kma_mini -c "CREATE EXTENSION IF NOT EXISTS vector;"
 ```
 
-应用启动时自动执行 Flyway V1–V23。V23 为当前站点创建不可变全站主题版本，并将已发布 V3 原子转换为 V4；旧 V2/V3 版本保持可回退。Mini 的运行目标必须是 `kma_mini`；不要将本项目指向原多租户 `kma` 数据库。
+应用启动时自动执行 Flyway V1–V24。V23 为当前站点创建不可变全站主题版本，并将已发布 V3 原子转换为 V4；V24 将主题扩展为“每站点主题目录”，允许同一站点保留多套独立、版本化主题。旧 V2/V3 版本保持可回退。Mini 的运行目标必须是 `kma_mini`；不要将本项目指向原多租户 `kma` 数据库。
 
 ### 2. 启动 API
 
@@ -189,6 +189,47 @@ docker compose up --build
 
 模型不可用时依赖状态可显示 `DEGRADED`，能力返回明确错误或受控降级。密钥只从进程环境或 Secret Provider 读取；不得写入数据库、前端响应、仓库或日志。
 
+## 门户主题工作台与本地源码同步
+
+`/console/portal-appearance` 是 Portal Theme V4 的全站主题工作台。主题控制门户 `/p/{siteKey}/**` 的页面结构和视觉样式，不控制登录页、治理后台、认证、数据权限或核心后端逻辑。
+
+### 本地源码目录
+
+三套内置主题作为可直接编辑的开发母版，已纳入 Git：
+
+```text
+src/main/resources/portal-themes/
+├── heritage-red/    # 党建典藏红
+├── governance-blue/ # 政务知蓝
+└── ink-night/       # 墨玉夜读
+```
+
+每套包含 `theme.json`、`layout.html`、`pages/*.html`、`styles/theme.css` 与 `scripts/theme.js`。开发环境默认从该目录读取；可用 `KMA_PORTAL_THEME_SOURCE_DIR` 指定其他目录。若目录不存在，应用回退读取 JAR 内资源。
+
+本地文件是“母版”，数据库主题版本才是门户运行快照：直接修改 CSS/HTML/JS 不会立即改变访客门户，也不会覆盖已发布或在线编辑过的版本。
+
+### 同步与发布流程
+
+```mermaid
+flowchart LR
+  A[修改本地主题文件] --> B[进入工作台或点击刷新本地状态]
+  B --> C{本地校验值是否变化}
+  C -- 否 --> D[显示“本地源码已同步”\n不写数据库、不创建版本]
+  C -- 是 --> E[显示“本地有未发布变更”]
+  E --> F[管理员点击“同步并立即发布”]
+  F --> G[创建不可变主题版本\n安全扫描]
+  G --> H[应用主题引用并原子切换门户]
+  H --> I[访客看到新版本]
+```
+
+- 工作台只在打开、切换站点或点击“刷新本地状态”时读取本地源码；不启用文件监听、轮询或自动发布。
+- 同步对比主题总 SHA-256 校验值。相同则返回 `unchanged`，不写主题文件表、不创建版本；不同才创建一个新的主题草稿并保存扫描结果。
+- 拥有 `portal-site:update`、`portal-page:edit`、`portal-code:edit`、`portal-site:publish` 四项权限的管理员可使用“立即发布”。该操作在一个事务内完成同步（如有变化）、安全校验、主题应用与门户发布指针切换。
+- 没有发布权限的编辑者仍使用“保存草稿 → 应用到门户草稿 → 送审”的受控流程；审核、历史版本、真实预览和回退能力保持可用。
+- 在线工作台编辑优先于本地文件：若编辑器有未保存内容，“立即发布”会先保存并扫描在线草稿，而不会用本地源码覆盖它。
+
+主题 JavaScript 只能在无同源权限的 iframe 沙箱中运行。主题不能直接访问网络、Cookie、Storage、父页面、数据库或后台接口；业务数据和导航必须经 Portal SDK，并再次受权限、站点范围和内容 ACL 约束。
+
 ## 身份、安全与边界
 
 - 仅支持 `KMA_SECURITY_MODE=local`；采用 Argon2id、15 分钟 Access Token、旋转 Refresh Token 与重放检测。
@@ -196,6 +237,7 @@ docker compose up --build
 - 内容安全可阻断提示注入，并在模型调用前后执行脱敏与审计。
 - 门户扩展为平台 CI 签名包；站点管理员只能配置已批准扩展，不能注入任意 JavaScript。
 - 草稿/审核版门户预览只向有编辑权限的登录用户开放，读取指定版本但不改动发布指针。
+- 本地主题同步仅允许三套受控内置主题；导入包、在线编辑与本地母版都必须通过相同的路径、大小、模板、脚本与 SDK 能力扫描。
 
 ## 演示数据
 
@@ -261,4 +303,4 @@ $env:KMA_IT_DB_PASSWORD = "<通过安全方式注入>"
 - 角色操作步骤：[docs/KMA-Mini-使用说明手册.md](docs/KMA-Mini-使用说明手册.md)
 - 流程图源与静态图：[docs/diagrams/](docs/diagrams/)
 
-提交代码时保持 API 契约、Flyway 历史迁移与 OpenAPI 类型单源一致。历史迁移中可能保留 `tenant` 命名；当前运行结构以 V22 后的物理单实例/单租户模型为准。
+提交代码时保持 API 契约、Flyway 历史迁移与 OpenAPI 类型单源一致。历史迁移中可能保留 `tenant` 命名；当前运行结构以 V22 后的物理单实例/单租户模型为准。主题母版目录属于源码，应与主题功能代码一同评审；其变更不会自动发布，需在工作台显式同步并发布。

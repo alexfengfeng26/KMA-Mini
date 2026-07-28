@@ -48,4 +48,19 @@ class PortalThemeSecurityTest {
             .anyMatch(issue -> issue.contains("原始输出"))
             .anyMatch(issue -> issue.contains("循环"));
     }
+
+    @Test
+    void rejectsUndeclaredSdkCapabilityBeforePublish() throws Exception {
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put("layout.html", "<kma-slot name=\"content\" />");
+        files.put("pages/home.html", "<kma-widget name=\"ai-chat\"></kma-widget>");
+        files.put("styles/theme.css", "body { color: #123; }");
+        files.put("scripts/theme.js", "portal.search.query('党建');");
+
+        assertThat(PortalThemeSecurity.validate(files, objectMapper.readTree("""
+            {"capabilities":["page-context"],"entry":"layout.html"}
+            """)))
+            .anyMatch(issue -> issue.contains("未声明的 SDK 能力: ask"))
+            .anyMatch(issue -> issue.contains("未声明的 SDK 能力: search"));
+    }
 }

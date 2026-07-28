@@ -1,29 +1,48 @@
-<section class="hero">
-  <p class="eyebrow">A Quiet Place for Knowledge</p>
-  <h1>{{ site.name }}</h1>
-  <p class="hero-lead">在低干扰的阅读环境里，重访重要制度、案例与学习材料。</p>
-  <div class="hero-actions">
-    <a href="#" data-kma-nav="library" class="cta">开始阅读</a>
-    <a href="#" data-kma-nav="ask" class="cta ghost">向资料提问</a>
+<section class="reading-head">
+  <div class="greeting">
+    <p class="greeting-kicker">Quiet Reading</p>
+    <h1>晚上好{% if user %}，{{ user.displayName }}{% endif %}</h1>
+    <p class="greeting-sub">灯已留好。从上次停下的地方继续，或者去书架上翻翻新到的资料。</p>
+  </div>
+  <div class="resume-panel" data-auto-hide>
+    <h2 class="quiet-heading">继续阅读</h2>
+    <div class="resume-row">
+      {% for item in history %}
+      <button type="button" class="resume-card" data-kma-content="{{ item.docId }}">
+        <strong>{{ item.title | truncate: 22 }}</strong>
+        <span>读到 {{ item.lastReadAt }}</span>
+      </button>
+      {% endfor %}
+    </div>
   </div>
 </section>
-<section class="section-block">
-  <header class="section-heading">
-    <div>
-      <p class="kicker">Continue Exploring</p>
-      <h2>最新资料</h2>
-    </div>
-    <a href="#" data-kma-nav="library" class="section-more">查看全部 →</a>
-  </header>
-  <kma-widget name="content-list" />
+<section class="reading-block">
+  <h2 class="quiet-heading">专题书架</h2>
+  <div class="bookshelf">
+    {% for topic in topics %}
+    <button type="button" class="spine" {% if topic.coverColor %}style="--spine:{{ topic.coverColor }}"{% endif %} data-kma-topic="{{ topic.topicCode }}">
+      <strong>{{ topic.name }}</strong>
+      <span>{{ topic.description | truncate: 30 }}</span>
+    </button>
+    {% endfor %}
+  </div>
 </section>
-<section class="section-block">
-  <header class="section-heading">
-    <div>
-      <p class="kicker">Collections</p>
-      <h2>专题书架</h2>
-    </div>
-    <a href="#" data-kma-nav="topics" class="section-more">全部专题 →</a>
-  </header>
-  <kma-widget name="topic-directory" />
+<section class="reading-block">
+  <h2 class="quiet-heading">最近收录</h2>
+  <ul class="quiet-list">
+    {% for item in recent %}
+    <li>
+      <button type="button" data-kma-content="{{ item.contentId }}">{{ item.title }}</button>
+      <time>{{ item.publishDate }}</time>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+<section class="reading-block" data-auto-hide>
+  <h2 class="quiet-heading">书签</h2>
+  <div class="bookmark-row">
+    {% for fav in favorites %}
+    <button type="button" class="bookmark" data-kma-content="{{ fav.docId }}">{{ fav.title | truncate: 18 }}</button>
+    {% endfor %}
+  </div>
 </section>

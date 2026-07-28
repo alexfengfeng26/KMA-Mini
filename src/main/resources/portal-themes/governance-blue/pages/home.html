@@ -1,29 +1,83 @@
-<section class="hero">
-  <p class="eyebrow">统一知识服务门户</p>
-  <h1>{{ site.name }}</h1>
-  <p class="hero-lead">以可信来源、结构化专题和快速检索，支撑政策学习与治理工作的每一次查证。</p>
-  <div class="hero-actions">
-    <a href="#" data-kma-nav="library" class="cta">进入资料库</a>
-    <a href="#" data-kma-nav="ask" class="cta ghost">发起智能问答</a>
+<section class="command-band">
+  <div class="command-intro">
+    <p class="kicker">统一知识服务门户</p>
+    <h1>{{ site.name }}</h1>
+    <p>可信来源 · 结构化专题 · 快速检索</p>
+  </div>
+  <div class="command-search">
+    <div class="search-strip">
+      <input id="gov-search" type="text" placeholder="输入政策标题、文号或关键词，例如：数据共享" />
+      <button id="gov-search-submit" type="button">检索资料</button>
+    </div>
+    <p class="search-hint">支持按标题、发文机关、文号检索，结果覆盖门户已收录的全部资料</p>
   </div>
 </section>
+<div id="gov-search-results" class="search-results" hidden></div>
 <section class="section-block">
   <header class="section-heading">
     <div>
-      <p class="kicker">Recent Updates</p>
-      <h2>最新资料</h2>
+      <p class="kicker">Categories</p>
+      <h2>分类导航</h2>
     </div>
-    <a href="#" data-kma-nav="library" class="section-more">查看全部 →</a>
+    <a href="#" data-kma-nav="library" class="section-more">进入资料库 →</a>
   </header>
-  <kma-widget name="content-list" />
+  <div class="category-grid">
+    {% for cat in data.categories %}
+    <a href="#" data-kma-nav="library" class="category-chip">
+      <strong>{{ cat.name }}</strong>
+      <span>{{ cat.total }} 篇</span>
+    </a>
+    {% endfor %}
+  </div>
 </section>
-<section class="section-block">
-  <header class="section-heading">
-    <div>
-      <p class="kicker">Knowledge Map</p>
-      <h2>专题导航</h2>
-    </div>
-    <a href="#" data-kma-nav="topics" class="section-more">全部专题 →</a>
-  </header>
-  <kma-widget name="topic-directory" />
-</section>
+<div class="workbench">
+  <section class="section-block workbench-main">
+    <header class="section-heading">
+      <div>
+        <p class="kicker">Recent Filings</p>
+        <h2>最新发文</h2>
+      </div>
+      <a href="#" data-kma-nav="library" class="section-more">查看全部 →</a>
+    </header>
+    <ol class="bulletin-list">
+      {% for item in recent %}
+      <li class="bulletin-row">
+        <div class="bulletin-body">
+          <h3>{{ item.title }}</h3>
+          <p>{{ item.summary | truncate: 72 }}</p>
+          <div class="bulletin-meta">
+            <span>{{ item.issuingAuthority }}</span>
+            {% if item.documentNumber %}<span>{{ item.documentNumber }}</span>{% endif %}
+            <time>{{ item.publishDate }}</time>
+          </div>
+        </div>
+        <button type="button" data-kma-content="{{ item.contentId }}">查阅</button>
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+  <aside class="workbench-side">
+    <section class="side-panel">
+      <header class="section-heading">
+        <div>
+          <p class="kicker">Topics</p>
+          <h2>专题直达</h2>
+        </div>
+      </header>
+      <div class="side-topic-list">
+        {% for topic in topics %}
+        <button type="button" class="side-topic" data-kma-topic="{{ topic.topicCode }}">
+          <strong>{{ topic.name }}</strong>
+          <span>{{ topic.description | truncate: 34 }}</span>
+        </button>
+        {% endfor %}
+      </div>
+    </section>
+    <section class="side-panel quick-ask">
+      <p class="kicker">Quick Ask</p>
+      <h2>带着问题来</h2>
+      <p>基于门户收录资料生成回答，结论可回溯到原文出处。</p>
+      <a href="#" data-kma-nav="ask" class="side-ask-link">发起智能问答 →</a>
+    </section>
+  </aside>
+</div>
