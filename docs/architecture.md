@@ -49,7 +49,7 @@ API 默认不执行入库任务；开发演示可合并 Worker，部署应拆分
 
 ### 3.1 迁移与核心域
 
-Flyway 从 V1 演进到 V22：基础 Schema、默认知识空间、可靠入库、全文检索、身份访问、模型 Profile、版本化向量、RAG 评测、存储生命周期、粒度授权、党建门户、多站点 CMS、视觉包、低代码 V3，最终由 V22 清理多租户残留并收敛为单实例结构。
+Flyway 从 V1 演进到 V23：基础 Schema、默认知识空间、可靠入库、全文检索、身份访问、模型 Profile、版本化向量、RAG 评测、存储生命周期、粒度授权、党建门户、多站点 CMS、视觉包、低代码 V3；V22 清理多租户残留并收敛为单实例结构，V23 增加 Portal Theme V4 的主题、不可变版本、文件、编译扫描结果和门户引用。
 
 核心域包括：
 
@@ -90,7 +90,11 @@ flowchart LR
 
 ## 5. CMS、门户与预览
 
-门户配置以版本化 JSON 保存。V3 使用响应式布局树，包含全局页头/页脚、系统页面根节点、组件属性 Schema、数据源、动作、样式和可复用区块。
+门户配置以版本化 JSON 保存。V4 配置只保存主题/版本引用、路由映射、能力清单和内容范围；源码、扫描结果与不可变快照独立存放在 V23 主题表中。V2/V3 响应式布局树继续作为兼容渲染器，仅用于历史回退。
+
+主题包由 `layout.html`、`pages/*.html`、`partials/*.html`、`styles/theme.css`、`scripts/*.js` 和 `assets/*` 构成。模板支持默认转义的 Liquid 变量、受限条件/循环/include/过滤器，以及 `kma-slot`、`kma-widget`、`kma-link`、`kma-action` 标签。
+
+门户核心壳层不执行主题源码。主题在 `sandbox="allow-scripts"`、无同源权限的全视口 iframe 中运行，CSP 固定 `connect-src 'none'`；网络、Cookie、Storage、父窗口 DOM、表单、弹窗、下载、动态导入和外部 CDN 均由静态扫描与运行时策略阻断。主题只能通过 MessageChannel Portal SDK 请求页面上下文、内容、检索、问答、导航和审计能力，宿主按主题清单、用户权限、站点范围和内容 ACL 再次裁决。
 
 ```mermaid
 stateDiagram-v2
@@ -103,9 +107,11 @@ stateDiagram-v2
   Published --> Archived: 新版本发布或回退
 ```
 
-- 设计器的真实预览通过受保护的管理员版本接口读取草稿/审核版本；携带 `previewVersion` 的门户路由绕过已发布缓存。
+- 全屏主题工作台提供 Monaco 多文件编辑、文件树、320–1920px 即时预览、ZIP 导入导出和 DeepSeek V4 Flash 多文件提案。
+- 真实预览通过受保护的管理员版本接口读取草稿/审核主题；携带 `previewVersion` 的门户路由绕过已发布缓存。
 - 预览使用该版本的页面、主题、扩展和内容范围，但绝不写入发布指针、审核状态或版本锁。
-- 扩展包仅允许平台 CI 签名产物；前端静态代码能力处于受控沙箱边界，站点管理员不能执行任意 JavaScript。
+- 保存、送审、发布和回退都重新检查主题引用及扫描状态；发布事务同时冻结主题版本并切换门户发布指针。
+- 主题 JavaScript 只在不可信沙箱中执行。它能完全控制门户视觉与局部交互，但不能绕过认证、权限、内容范围或核心 Spring/Vue 代码。
 
 ## 6. 前端架构
 
@@ -117,7 +123,7 @@ stateDiagram-v2
 | `router` | 路由守卫、登录、站点初始化、遗留 `/portal` 兼容 |
 | `api` | OpenAPI 类型客户端、分页/错误规范化、SSE |
 | `stores` | 身份、门户 Bootstrap、主题与运行时状态 |
-| `cms` | V2/V3 配置契约、布局渲染、组件库、门户扩展 |
+| `cms` | V2/V3 兼容渲染、V4 Theme Kernel、Liquid/KMA 标签、Portal SDK 与沙箱 |
 | `views` | 控制台和门户业务界面 |
 
 `portalSite` Store 将站点 Bootstrap、主题 Token 和预览版本作为同一缓存维度。预览内容、正文和问答请求会切换到管理员版本预览端点，防止草稿范围被已发布版本缓存污染。

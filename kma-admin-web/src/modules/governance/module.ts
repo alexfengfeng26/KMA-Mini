@@ -122,7 +122,7 @@ export default defineFrontendModules([
       {
         path: 'portal-appearance',
         name: 'console-portal-appearance',
-        component: () => import('../../views/lowcode/PortalLowCodeDesignerView.vue'),
+        component: () => import('../../views/theme/PortalThemeStudioView.vue'),
       },
     ],
   },

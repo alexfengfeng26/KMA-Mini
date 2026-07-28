@@ -1,4 +1,5 @@
 import { authorizedJson, asList, asRecord } from './client'
+import { openAuthorizedFile } from './download'
 import { normalizePortalHome } from './party'
 import type {
   PortalBootstrap,
@@ -16,15 +17,49 @@ function adminPath(siteKey = '', suffix = '') {
   return `/api/v1/admin/portal-sites${siteKey ? `/${encodeURIComponent(siteKey)}` : ''}${suffix}`
 }
 
+export function normalizeThemeRuntime(raw: unknown): PortalBootstrap['themeRuntime'] | undefined {
+  const runtime = asRecord(raw)
+  if (!Object.keys(runtime).length) return undefined
+  type ThemeRuntime = NonNullable<PortalBootstrap['themeRuntime']>
+  let manifest: unknown = runtime.manifest
+  for (let depth = 0; depth < 3; depth += 1) {
+    const record = asRecord(manifest)
+    if (Array.isArray(record.capabilities) || typeof record.entry === 'string') {
+      manifest = record
+      break
+    }
+    if (typeof record.value !== 'string') break
+    try {
+      manifest = JSON.parse(record.value)
+    } catch {
+      break
+    }
+  }
+  return {
+    ...(runtime as unknown as ThemeRuntime),
+    manifest: asRecord(manifest) as ThemeRuntime['manifest'],
+  }
+}
+
 function toPortalBootstrap(raw: unknown): PortalBootstrap {
   const value = asRecord(raw)
+  const rawTheme = asRecord(value.theme)
   return {
-    schemaVersion: Number(value.schemaVersion || 2) === 3 ? 3 : 2,
+    schemaVersion:
+      Number(value.schemaVersion || 2) === 4 ? 4 : Number(value.schemaVersion || 2) === 3 ? 3 : 2,
     site: asRecord(value.site) as unknown as PortalSiteSummary,
     publishedVersion: Number(value.publishedVersion || 0),
     revision: String(value.revision || ''),
     shell: asRecord(value.shell) as unknown as PortalBootstrap['shell'],
-    theme: asRecord(value.theme) as unknown as PortalBootstrap['theme'],
+    theme:
+      typeof rawTheme.preset === 'string'
+        ? (rawTheme as unknown as PortalBootstrap['theme'])
+        : {
+            preset: 'theme-v4',
+            mode: 'light',
+            density: 'comfortable',
+            tokens: {},
+          },
     modules: asRecord(value.modules) as Record<string, boolean>,
     search: asRecord(value.search) as unknown as PortalBootstrap['search'],
     assistant: asRecord(value.assistant) as unknown as PortalBootstrap['assistant'],
@@ -33,6 +68,7 @@ function toPortalBootstrap(raw: unknown): PortalBootstrap {
     packages: asList(value.packages) as unknown as PortalBootstrap['packages'],
     extensions: asList(value.extensions) as unknown as PortalBootstrap['extensions'],
     portalData: normalizePortalHome(value.portalData),
+    themeRuntime: normalizeThemeRuntime(value.themeRuntime),
     preview: value.preview === true,
     previewVersion: Number(value.previewVersion || 0) || undefined,
     previewVersionId: Number(value.previewVersionId || 0) || undefined,
@@ -184,6 +220,48 @@ export function rollbackPortalVersion(siteKey: string, versionId: number) {
   })
 }
 
+export interface PortalThemeWorkspace {
+  site: PortalSiteSummary
+  theme: {
+    themeId: number
+    themeKey: string
+    displayName: string
+    currentVersionId?: number
+  }
+  version: {
+    themeVersionId: number
+    versionNo: number
+    status: 'draft' | 'published' | 'archived'
+    manifest: { capabilities?: string[]; entry?: string }
+    checksum: string
+    scanStatus: 'pending' | 'passed' | 'failed'
+    scanResult?: { issues?: string[] }
+    lockVersion: number
+  }
+  portalVersion: PortalConfigVersion
+  files: Record<string, string>
+}
+
+export function getPortalThemeWorkspace(siteKey: string) {
+  return authorizedJson<PortalThemeWorkspace>(adminPath(siteKey, '/theme-workspace'))
+}
+
+export function savePortalThemeWorkspace(
+  siteKey: string,
+  themeVersionId: number,
+  body: {
+    files: Record<string, string>
+    manifest: Record<string, unknown>
+    expectedLockVersion: number
+  },
+) {
+  return authorizedJson<PortalThemeWorkspace>(adminPath(siteKey, `/theme-workspace/${themeVersionId}`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
 export interface PortalDesignCapability {
   available: boolean
   provider: string
@@ -253,6 +331,65 @@ export function getPortalAnalytics(siteKey: string, days = 30) {
   return authorizedJson<PortalAnalyticsSummary>(
     adminPath(siteKey, `/analytics?days=${Math.max(1, Math.min(days, 90))}`),
   )
+}
+
+export interface PortalThemeDesignProposal {
+  model: string
+  summary: string
+  warnings: string[]
+  files: Record<string, string>
+  changedFiles: string[]
+  promptTokens: number
+  completionTokens: number
+}
+
+export function proposePortalTheme(
+  siteKey: string,
+  themeVersionId: number,
+  body: { expectedLockVersion: number; files: Record<string, string>; instruction: string },
+) {
+  return authorizedJson<PortalThemeDesignProposal>(
+    adminPath(siteKey, `/theme-workspace/${themeVersionId}/ai-proposals`),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  )
+}
+
+export function exportPortalTheme(siteKey: string, themeVersionId: number) {
+  return openAuthorizedFile(adminPath(siteKey, `/theme-workspace/${themeVersionId}/export`))
+}
+
+export function importPortalTheme(
+  siteKey: string,
+  themeVersionId: number,
+  expectedLockVersion: number,
+  file: File,
+) {
+  const body = new FormData()
+  body.append('file', file)
+  return authorizedJson<PortalThemeWorkspace>(
+    adminPath(
+      siteKey,
+      `/theme-workspace/${themeVersionId}/import?expectedLockVersion=${expectedLockVersion}`,
+    ),
+    { method: 'POST', body },
+  )
+}
+
+export function diffPortalThemes(siteKey: string, fromVersionId: number, toVersionId: number) {
+  return authorizedJson<{
+    fromVersionId: number
+    toVersionId: number
+    changes: Array<{
+      path: string
+      change: 'added' | 'modified' | 'deleted'
+      beforeChecksum: string
+      afterChecksum: string
+    }>
+  }>(adminPath(siteKey, `/theme-workspace/diff?fromVersionId=${fromVersionId}&toVersionId=${toVersionId}`))
 }
 
 export interface PortalCodeVersion {

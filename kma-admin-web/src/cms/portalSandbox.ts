@@ -1,6 +1,7 @@
 import type { PortalInlineCode } from './siteConfig'
 
-const CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'"
+const CSP =
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'"
 
 const sdk = String.raw`<script>
 (() => {
@@ -39,9 +40,12 @@ export function buildInlineSandboxDocument(source: PortalInlineCode): string {
 
 export const defaultInlineCode = (): PortalInlineCode => ({
   files: {
-    'index.html': '<main class="kma-inline-widget"><h2>自定义代码区块</h2><p id="portal-context">正在连接门户 SDK…</p></main>',
-    'style.css': '.kma-inline-widget{padding:24px;border:1px solid #b8d9ce;border-radius:14px;background:#f2faf7;color:#143d34}.kma-inline-widget h2{margin:0 0 8px}',
-    'main.js': "window.addEventListener('portal-sdk-ready', async () => { const context = await window.portal.context.get(); document.querySelector('#portal-context').textContent = context.site.name + ' · ' + context.page; });",
+    'index.html':
+      '<main class="kma-inline-widget"><h2>自定义代码区块</h2><p id="portal-context">正在连接门户 SDK…</p></main>',
+    'style.css':
+      '.kma-inline-widget{padding:24px;border:1px solid #b8d9ce;border-radius:14px;background:#f2faf7;color:#143d34}.kma-inline-widget h2{margin:0 0 8px}',
+    'main.js':
+      "window.addEventListener('portal-sdk-ready', async () => { const context = await window.portal.context.get(); document.querySelector('#portal-context').textContent = context.site.name + ' · ' + context.page; });",
   },
   manifest: { capabilities: ['page-context'] },
 })

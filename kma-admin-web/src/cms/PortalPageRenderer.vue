@@ -4,6 +4,7 @@ import CmsPageRendererV2 from './CmsPageRendererV2.vue'
 import type { PortalBootstrap } from './siteConfig'
 import { isLowCodePage } from './siteConfig'
 import CmsPageRendererV3 from './v3/CmsPageRendererV3.vue'
+import PortalThemeHost from './v4/PortalThemeHost.vue'
 
 defineProps<{
   bootstrap: PortalBootstrap
@@ -20,8 +21,9 @@ const emit = defineEmits<{
 </script>
 
 <template>
+  <PortalThemeHost v-if="bootstrap.schemaVersion === 4 && bootstrap.themeRuntime" :bootstrap="bootstrap" />
   <CmsPageRendererV3
-    v-if="isLowCodePage(bootstrap.page)"
+    v-else-if="isLowCodePage(bootstrap.page)"
     :page="bootstrap.page"
     :bootstrap="bootstrap"
     :query="query"
@@ -31,7 +33,7 @@ const emit = defineEmits<{
     @category="emit('category', $event)"
   />
   <CmsPageRendererV2
-    v-else
+    v-else-if="'regions' in bootstrap.page"
     :page="bootstrap.page"
     :data="data"
     :query="query"

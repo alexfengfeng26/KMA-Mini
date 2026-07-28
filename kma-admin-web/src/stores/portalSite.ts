@@ -36,6 +36,15 @@ export const usePortalSiteStore = defineStore('portal-site', () => {
     for (const variable of appliedVariables) root.style.removeProperty(variable)
     appliedVariables.clear()
     root.dataset.kmaSite = value.site.siteKey
+    if (value.schemaVersion === 4) {
+      root.dataset.kmaTheme = 'theme-v4'
+      root.dataset.kmaPack = 'theme-v4'
+      root.dataset.kmaShell = 'theme-v4'
+      root.dataset.kmaDensity = 'comfortable'
+      root.dataset.kmaColorMode = 'light'
+      document.querySelector('style[data-kma-site-theme]')?.remove()
+      return
+    }
     root.dataset.kmaTheme = value.theme.preset || 'emerald'
     root.dataset.kmaPack = value.theme.pack || 'party-authority'
     root.dataset.kmaShell =

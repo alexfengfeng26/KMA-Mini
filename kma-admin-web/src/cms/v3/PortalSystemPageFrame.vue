@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { usePortalSiteStore } from '../../stores/portalSite'
 import { portalSitePath } from '../../security/siteRoute'
 import { isLowCodePage, type PortalCoreComponent } from '../siteConfig'
+import PortalThemeHost from '../v4/PortalThemeHost.vue'
 import CmsPageRendererV3 from './CmsPageRendererV3.vue'
 
 const props = defineProps<{ coreComponent: PortalCoreComponent }>()
@@ -12,6 +13,10 @@ const router = useRouter()
 const lowCodePage = computed(() => {
   const bootstrap = portalSite.bootstrap
   return bootstrap && isLowCodePage(bootstrap.page) ? bootstrap.page : undefined
+})
+const themeBootstrap = computed(() => {
+  const bootstrap = portalSite.bootstrap
+  return bootstrap?.schemaVersion === 4 && bootstrap.themeRuntime ? bootstrap : undefined
 })
 function leavePreview() {
   const bootstrap = portalSite.bootstrap
@@ -25,22 +30,27 @@ function leavePreview() {
 </script>
 
 <template>
-  <aside v-if="portalSite.bootstrap?.preview" class="portal-preview-banner" role="status">
-    <span>预览中 · V{{ portalSite.bootstrap.previewVersion || portalSite.bootstrap.publishedVersion }}</span>
-    <button type="button" @click="leavePreview">返回已发布门户</button>
-  </aside>
-  <CmsPageRendererV3
-    v-if="portalSite.bootstrap && lowCodePage"
-    :page="lowCodePage"
-    :bootstrap="portalSite.bootstrap"
-    :query="''"
-    :core-component="props.coreComponent"
-  >
-    <template #core>
-      <slot />
-    </template>
-  </CmsPageRendererV3>
-  <slot v-else />
+  <PortalThemeHost v-if="themeBootstrap" :bootstrap="themeBootstrap" />
+  <template v-else>
+    <aside v-if="portalSite.bootstrap?.preview" class="portal-preview-banner" role="status">
+      <span
+        >预览中 · V{{ portalSite.bootstrap.previewVersion || portalSite.bootstrap.publishedVersion }}</span
+      >
+      <button type="button" @click="leavePreview">返回已发布门户</button>
+    </aside>
+    <CmsPageRendererV3
+      v-if="portalSite.bootstrap && lowCodePage"
+      :page="lowCodePage"
+      :bootstrap="portalSite.bootstrap"
+      :query="''"
+      :core-component="props.coreComponent"
+    >
+      <template #core>
+        <slot />
+      </template>
+    </CmsPageRendererV3>
+    <slot v-else />
+  </template>
 </template>
 
 <style scoped>

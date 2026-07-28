@@ -62,8 +62,9 @@ public class PortalSiteConfigValidator {
         List<String> issues = new ArrayList<>();
         if (config == null || !config.isObject()) return List.of("配置必须是 JSON 对象");
         int schemaVersion = config.path("schemaVersion").asInt(-1);
+        if (schemaVersion == 4) return validateV4(config, expectedSiteKey);
         if (schemaVersion == 3) return validateV3(config, expectedSiteKey);
-        if (schemaVersion != 2) issues.add("schemaVersion 必须为 2 或 3");
+        if (schemaVersion != 2) issues.add("schemaVersion 必须为 2、3 或 4");
         requireObject(config, "site", issues);
         requireObject(config, "shell", issues);
         requireObject(config, "theme", issues);
@@ -88,6 +89,36 @@ public class PortalSiteConfigValidator {
         validatePages(config.path("pages"), issues);
         validateScope(config.path("contentScope"), issues);
         validateTheme(config.path("theme"), issues);
+        scanDangerousFields(config, "", issues);
+        return List.copyOf(issues);
+    }
+
+    private List<String> validateV4(JsonNode config, String expectedSiteKey) {
+        List<String> issues = new ArrayList<>();
+        requireObject(config, "site", issues);
+        requireObject(config, "theme", issues);
+        requireObject(config, "routes", issues);
+        requireObject(config, "contentScope", issues);
+        String siteKey = config.path("site").path("siteKey").asText("");
+        if (!IDENTIFIER.matcher(siteKey).matches()) issues.add("site.siteKey 不合法");
+        if (StringUtils.hasText(expectedSiteKey) && !expectedSiteKey.equals(siteKey))
+            issues.add("site.siteKey 与目标站点不一致");
+        if (config.path("theme").path("themeId").asLong(0) <= 0
+            || config.path("theme").path("versionId").asLong(0) <= 0)
+            issues.add("Portal Theme V4 必须引用主题和主题版本");
+        JsonNode routes = config.path("routes");
+        if (routes.size() > 100) issues.add("V4 路由数量超过 100");
+        routes.fields().forEachRemaining(entry -> {
+            if (!IDENTIFIER.matcher(entry.getKey()).matches()
+                || !entry.getValue().asText("").matches("^pages/[A-Za-z0-9][A-Za-z0-9_/-]{0,120}[.]html$"))
+                issues.add("V4 路由模板不合法: " + entry.getKey());
+        });
+        for (String route : List.of("home", "library", "topics", "ask", "content", "search", "favorites", "profile")) {
+            String path = routes.path(route).asText("");
+            if (!path.matches("^pages/[A-Za-z0-9][A-Za-z0-9_/-]{0,120}[.]html$"))
+                issues.add("V4 路由模板不合法: " + route);
+        }
+        validateScope(config.path("contentScope"), issues);
         scanDangerousFields(config, "", issues);
         return List.copyOf(issues);
     }

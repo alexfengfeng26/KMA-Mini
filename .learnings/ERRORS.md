@@ -31,6 +31,437 @@ Failed to instantiate [com.kma.common.security.KmaLocalAuthService]: No default 
 
 ---
 
+## [ERR-20260728-013] portal_qa_model_services_unavailable
+
+**Logged**: 2026-07-28T14:18:00+08:00
+**Priority**: high
+**Status**: pending
+**Area**: infra
+
+### Summary
+V4 AI 问答页面和 SDK 通信正常，但知识问答依赖的 Ollama 与本地 Embedding 服务均未监听，回答请求失败。
+
+### Error
+```
+localhost:11434 TCP connect failed
+localhost:9997 TCP connect failed
+```
+
+### Context
+- DeepSeek V4 Flash 整站主题提案已真实调用成功，它是独立的门户设计模型。
+- 知识 RAG 仍按既定边界使用 `knowledge.llm` 与 embedding profile，不应自动切换到设计模型。
+
+### Suggested Fix
+启动配置对应的 Ollama 与 BGE-M3 服务，或在模型配置中切换可用的知识问答 Profile；Portal SDK 应透出脱敏业务错误而不是仅显示泛化失败。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/main/resources/application.yml
+
+---
+
+## [ERR-20260728-012] preview_new_tab_lost_session
+
+**Logged**: 2026-07-28T14:13:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+真实草稿预览使用 `noopener` 直接开新标签，导致浏览器不复制 sessionStorage 访问令牌并跳到登录页。
+
+### Error
+```
+/login?redirect=/p/default/home?previewVersion=18
+```
+
+### Context
+- 预览接口本身要求管理员已登录。
+- 当前前端路由守卫先检查 sessionStorage；`noopener` 新上下文没有令牌副本。
+
+### Suggested Fix
+先通过同源 `window.open` 创建新标签以复制 sessionStorage，随后立即清空新窗口 `opener`，兼顾认证与反向标签劫持隔离。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/views/theme/PortalThemeStudioView.vue
+
+### Resolution
+- **Resolved**: 2026-07-28T14:13:30+08:00
+- **Commit/PR**: pending
+- **Notes**: 已调整真实预览打开顺序，等待浏览器复测。
+
+---
+
+## [ERR-20260728-011] browser_dom_cua_node_id_type
+
+**Logged**: 2026-07-28T14:09:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+浏览器 DOM 控制 API 的 `node_id` 要求字符串，误传数字导致保存按钮测试未执行。
+
+### Error
+```
+dom_cua.click node_id must be a string
+```
+
+### Context
+- 可见 DOM 已唯一确认保存草稿按钮为 node_id 31。
+- 错误发生在调用参数类型，不是页面或产品故障。
+
+### Suggested Fix
+DOM 控制节点标识始终按工具契约原样作为字符串传入。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/views/theme/PortalThemeStudioView.vue
+
+### Resolution
+- **Resolved**: 2026-07-28T14:09:15+08:00
+- **Commit/PR**: pending
+- **Notes**: 后续调用改用 `node_id: "31"`。
+
+---
+
+## [ERR-20260728-010] backend_database_role_mismatch
+
+**Logged**: 2026-07-28T14:01:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: infra
+
+### Summary
+首次重启沿用默认数据库用户 `kma`，但提供的是 PostgreSQL 管理用户密码，Flyway 鉴权失败。
+
+### Error
+```
+SQL State 28P01: 用户 "kma" Password 验证失败
+```
+
+### Context
+- `application.yml` 默认 `KMA_DB_USERNAME=kma`。
+- 当前已确认可用凭据属于 `postgres`，且 V23 需要执行迁移。
+- 不能修改共享 `kma` 角色密码，以免影响多租户版。
+
+### Suggested Fix
+Mini 进程显式设置 `KMA_DB_USERNAME=postgres` 与对应进程级密码；不修改数据库角色或源库。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/main/resources/application.yml
+
+### Resolution
+- **Resolved**: 2026-07-28T14:01:30+08:00
+- **Commit/PR**: pending
+- **Notes**: 改为仅在 Mini 后端进程环境中使用 postgres 用户，不更改任何数据库角色。
+
+---
+
+## [ERR-20260728-009] spring_boot_jar_locked_by_running_backend
+
+**Logged**: 2026-07-28T13:55:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: infra
+
+### Summary
+后端仍从 target JAR 运行，Spring Boot repackage 无法重命名被 Windows 锁定的构件。
+
+### Error
+```
+Unable to rename kma-mini-server-0.1.0-mini.jar to .jar.original
+```
+
+### Context
+- V23 上线前执行 Maven package。
+- Windows 正在运行的 8090 后端持有 JAR 文件句柄。
+
+### Suggested Fix
+精确确认 8090 监听进程属于 KMA Mini 后端，停止该进程后重新 package；不停止 PostgreSQL或多租户 KMA。
+
+### Metadata
+- Reproducible: yes
+- Related Files: target/kma-mini-server-0.1.0-mini.jar
+- Recurrence-Count: 2
+
+### Resolution
+- **Resolved**: 2026-07-28T13:57:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已核对 PID 24732 的命令行只指向 KMA Mini JAR，停止该后端后 package 成功；2026-07-28 修复 SDK manifest 时再次遇到，运行态验证应先使用 `compile`，待精确重启 8090 后端时再执行 `package`。
+
+---
+
+## [ERR-20260728-008] auth_principal_display_field_mismatch
+
+**Logged**: 2026-07-28T13:48:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+V4 Portal SDK 用户上下文误用不存在的 `nickname` 字段，前端类型检查失败。
+
+### Error
+```
+PortalThemeHost.vue: Property 'nickname' does not exist on type UserInfo
+```
+
+### Context
+- 实际认证契约提供 `displayName` 与 `username`。
+- 主题上下文只暴露脱敏身份展示字段，不传 token。
+
+### Suggested Fix
+对接认证上下文时以生成类型为准，使用 `displayName`，并保持最小字段投影。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/cms/v4/PortalThemeHost.vue
+
+### Resolution
+- **Resolved**: 2026-07-28T13:48:30+08:00
+- **Commit/PR**: pending
+- **Notes**: 已改为 `displayName`，模板渲染同步更新。
+
+---
+
+## [ERR-20260728-007] theme_studio_stylelint_rules
+
+**Logged**: 2026-07-28T13:29:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+主题工作台首次样式检查违反项目的重复选择器、alpha 小数写法和媒体查询范围语法规则。
+
+### Error
+```
+no-duplicate-selectors
+alpha-value-notation
+media-feature-range-notation
+```
+
+### Context
+- 执行 `npm run stylelint`。
+- 新增全屏三栏主题工作台样式。
+
+### Suggested Fix
+合并相同选择器，透明度使用 `0.35`，媒体查询使用 `(width <= 1100px)`。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/views/theme/PortalThemeStudioView.vue
+
+### Resolution
+- **Resolved**: 2026-07-28T13:29:30+08:00
+- **Commit/PR**: pending
+- **Notes**: 三项规则均已按项目规范修正。
+
+---
+
+## [ERR-20260728-006] pg_dump_validation_timeout
+
+**Logged**: 2026-07-28T12:18:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: infra
+
+### Summary
+V23 临时验证库备份在 120 秒工具期限内未返回，需要确认 `pg_dump` 是否仍在运行及 dump 是否完整。
+
+### Error
+```
+command timed out after 124062 milliseconds
+```
+
+### Context
+- 对 `kma_mini` 执行 PostgreSQL 18 custom-format 只读备份。
+- 目标为仓库 `target/kma_mini_v23_verify.dump`，未触碰多租户库 `kma`。
+
+### Suggested Fix
+先检查 `pg_dump` 进程和文件增长；若仍运行则等待完成，若已终止则删除不完整临时文件后以更长超时重试。
+
+### Metadata
+- Reproducible: yes
+- Related Files: target/kma_mini_v23_verify.dump
+
+### Resolution
+- **Resolved**: 2026-07-28T12:20:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 根因是存在性检查发生在设置 `PGPASSWORD` 之前，psql 等待交互密码；已改为在任何 PostgreSQL 客户端调用前注入进程环境变量。
+
+---
+
+## [ERR-20260728-005] vue_lint_unnecessary_escape
+
+**Logged**: 2026-07-28T12:13:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+主题工作台新增 HTML 文件默认内容在单引号字符串中多余转义双引号，ESLint 拒绝构建。
+
+### Error
+```
+PortalThemeStudioView.vue:231:58 no-useless-escape
+```
+
+### Context
+- 执行 `npm run lint`。
+- HTML 默认片段使用单引号 TypeScript 字符串。
+
+### Suggested Fix
+字符串定界符已经避免冲突时不转义内部双引号，并在新增 Vue 文件后运行 ESLint。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/views/theme/PortalThemeStudioView.vue
+
+### Resolution
+- **Resolved**: 2026-07-28T12:13:30+08:00
+- **Commit/PR**: pending
+- **Notes**: 已移除多余转义。
+
+---
+
+## [ERR-20260728-004] security_test_message_mismatch
+
+**Logged**: 2026-07-28T12:09:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+主题安全测试断言使用“`三大括号`”措辞，而扫描器稳定诊断文本为“`禁止的原始输出`”，导致行为正确但测试失败。
+
+### Error
+```
+PortalThemeSecurityTest.rejectsNetworkEscapeRawOutputAndIncludeCycles
+none matched predicate "三大括号"
+```
+
+### Context
+- 扫描器正确识别了原始输出、远程 CSS、fetch 和 include 循环。
+- 失败只来自断言文案与实际业务诊断不一致。
+
+### Suggested Fix
+安全测试断言稳定的错误语义或错误码，避免绑定不一致的展示措辞。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/test/java/com/kma/knowledge/service/PortalThemeSecurityTest.java
+
+### Resolution
+- **Resolved**: 2026-07-28T12:09:30+08:00
+- **Commit/PR**: pending
+- **Notes**: 断言调整为稳定语义“原始输出”。
+
+---
+
+## [ERR-20260728-003] integration_test_new_dependency_import
+
+**Logged**: 2026-07-28T12:07:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+集成测试构造器补入 `PortalThemeService` mock 后漏同步 import，测试源码编译失败。
+
+### Error
+```
+KnowledgePortalSiteLocalPostgresIntegrationTest.java:[88,56] 找不到符号: 类 PortalThemeService
+```
+
+### Context
+- PortalSiteService 新增 Theme Service 构造依赖。
+- 主源码编译成功，测试源码在运行目标测试时暴露缺失 import。
+
+### Suggested Fix
+服务构造器依赖发生变化时，同时更新直接构造该服务的测试、imports，并执行真实 `test` 而非仅依赖增量 `test-compile`。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/test/java/com/kma/knowledge/KnowledgePortalSiteLocalPostgresIntegrationTest.java
+
+### Resolution
+- **Resolved**: 2026-07-28T12:07:30+08:00
+- **Commit/PR**: pending
+- **Notes**: 已导入 `PortalThemeService`。
+
+---
+
+## [ERR-20260728-002] powershell_unquoted_maven_test_list
+
+**Logged**: 2026-07-28T12:05:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+PowerShell 将 Maven `-Dtest=A,B` 中的逗号解析为参数列表，目标测试命令未执行。
+
+### Error
+```
+ParserError: Missing argument in parameter list.
+```
+
+### Context
+- 执行 `.\\mvnw.cmd -q -Dtest=PortalThemeSecurityTest,PortalSiteConfigValidatorTest test`。
+- Windows PowerShell 环境。
+
+### Suggested Fix
+包含逗号的 Maven `-Dtest` 参数必须整体加引号。
+
+### Metadata
+- Reproducible: yes
+- Related Files: pom.xml
+
+### Resolution
+- **Resolved**: 2026-07-28T12:05:30+08:00
+- **Commit/PR**: pending
+- **Notes**: 改用 `"-Dtest=PortalThemeSecurityTest,PortalSiteConfigValidatorTest"`。
+
+---
+
+## [ERR-20260728-001] java_missing_import_after_v4_page_factory
+
+**Logged**: 2026-07-28T12:00:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: backend
+
+### Summary
+Portal V4 页面工厂新增 `ObjectNode` 后漏加显式 import，导致 Maven 编译失败。
+
+### Error
+```
+PortalSiteService.java:[362,13] 找不到符号
+符号: 类 ObjectNode
+```
+
+### Context
+- 执行 `.\\mvnw.cmd -q -DskipTests compile`。
+- 新增 V4 路由到合成页面对象时使用了 Jackson `ObjectNode`。
+
+### Suggested Fix
+新增 Java 类型后立即运行主源码编译，并同时检查 import 与测试中的构造器签名。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/main/java/com/kma/knowledge/service/PortalSiteService.java
+
+### Resolution
+- **Resolved**: 2026-07-28T12:01:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已补充 `com.fasterxml.jackson.databind.node.ObjectNode` import。
+
+---
+
 ## [ERR-20260727-032] parallel_playwright_shared_artifacts
 
 **Logged**: 2026-07-27T17:57:00+08:00
@@ -1060,5 +1491,70 @@ because it does not exist.
 - **Resolved**: 2026-07-27T15:54:00+08:00
 - **Commit/PR**: pending
 - **Notes**: 后续使用文件索引定位系统页面框架。
+
+---
+## [ERR-20260728-014] postgres_client_not_on_path
+
+**Logged**: 2026-07-28T00:00:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+本机 PostgreSQL 18 客户端已安装，但 `psql.exe` 不在 PowerShell PATH。
+
+### Error
+```
+The term 'psql' is not recognized as a name of a cmdlet, function, script file, or executable program.
+```
+
+### Context
+- 使用 `psql -h localhost -U postgres -d kma_mini` 核对主题 manifest。
+- 客户端实际位于 `C:\Program Files\PostgreSQL\18\bin\psql.exe`。
+
+### Suggested Fix
+Windows 本机数据库诊断直接使用 PostgreSQL 18 客户端绝对路径。
+
+### Metadata
+- Reproducible: yes
+- Related Files: .learnings/ERRORS.md
+
+### Resolution
+- **Resolved**: 2026-07-28T00:00:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已定位 PostgreSQL 18 客户端绝对路径。
+
+---
+## [ERR-20260728-015] optional_runtime_type_spread
+
+**Logged**: 2026-07-28T00:00:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+对可选 `themeRuntime` 类型直接展开导致必填字段被推断为可选。
+
+### Error
+```
+Type 'number | undefined' is not assignable to type 'number'.
+Property 'manifest' does not exist on type 'PortalThemeRuntime | undefined'.
+```
+
+### Context
+- 为历史 JDBC JSON 包装结构增加前端兼容解析。
+- 使用了 `PortalBootstrap['themeRuntime']` 这一包含 `undefined` 的索引类型。
+
+### Suggested Fix
+先用 `NonNullable<PortalBootstrap['themeRuntime']>` 建立局部确定类型，再展开并索引 manifest。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/api/portalSites.ts
+
+### Resolution
+- **Resolved**: 2026-07-28T00:00:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已改为局部 `ThemeRuntime = NonNullable<...>`。
 
 ---

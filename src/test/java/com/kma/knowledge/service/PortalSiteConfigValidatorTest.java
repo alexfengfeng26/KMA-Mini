@@ -93,4 +93,31 @@ class PortalSiteConfigValidatorTest {
             .anyMatch(issue -> issue.contains("未知组件"))
             .anyMatch(issue -> issue.contains("1–4"));
     }
+
+    @Test
+    void acceptsV4ThemeReferenceAndRejectsUnsafeRouteMapping() throws Exception {
+        JsonNode valid = objectMapper.readTree("""
+            {
+              "schemaVersion":4,
+              "site":{"siteKey":"default","scenario":"party","name":"知识门户"},
+              "theme":{"themeId":1,"versionId":2},
+              "routes":{
+                "home":"pages/home.html","library":"pages/library.html",
+                "topics":"pages/topics.html","ask":"pages/ask.html",
+                "content":"pages/content.html","search":"pages/search.html",
+                "favorites":"pages/favorites.html","profile":"pages/profile.html"
+              },
+              "modules":{},
+              "contentScope":{"allSpaces":true,"spaceCodes":[]},
+              "search":{},"assistant":{}
+            }
+            """);
+
+        assertThat(validator.validate(valid, "default")).isEmpty();
+        JsonNode invalid = valid.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) invalid.path("routes"))
+            .put("home", "../../layout.html");
+        assertThat(validator.validate(invalid, "default"))
+            .contains("V4 路由模板不合法: home");
+    }
 }

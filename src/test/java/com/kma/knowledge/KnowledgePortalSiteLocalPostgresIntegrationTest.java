@@ -21,6 +21,7 @@ import com.kma.knowledge.service.PortalCodePackageService;
 import com.kma.knowledge.service.PortalExtensionService;
 import com.kma.knowledge.service.PortalSiteConfigValidator;
 import com.kma.knowledge.service.PortalSiteService;
+import com.kma.knowledge.service.PortalThemeService;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,7 +86,7 @@ class KnowledgePortalSiteLocalPostgresIntegrationTest {
         SecurityAuditService audit = mock(SecurityAuditService.class);
         service = new PortalSiteService(jdbc, new ObjectMapper(), new PortalSiteConfigValidator(),
             new PortalCssScopeService(), new PortalExtensionService(jdbc, new ObjectMapper(), audit),
-            mock(PortalCodePackageService.class), partyKnowledge, audit);
+            mock(PortalCodePackageService.class), mock(PortalThemeService.class), partyKnowledge, audit);
     }
 
     @AfterEach

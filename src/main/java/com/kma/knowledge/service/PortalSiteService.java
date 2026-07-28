@@ -3,6 +3,7 @@ package com.kma.knowledge.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.kma.common.exception.KmaException;
 import com.kma.common.security.KmaIdentityContext;
 import com.kma.common.security.SecurityAuditService;
@@ -44,6 +45,7 @@ public class PortalSiteService {
     private final PortalCssScopeService cssScopeService;
     private final PortalExtensionService extensionService;
     private final PortalCodePackageService codePackageService;
+    private final PortalThemeService themeService;
     private final PartyKnowledgeService partyKnowledgeService;
     private final SecurityAuditService auditService;
 
@@ -232,6 +234,7 @@ public class PortalSiteService {
         compileScope(site, request.getVersionId(), config);
         extensionService.compileUsage(site.siteId(), request.getVersionId(), config);
         codePackageService.compileUsage(site.siteId(), request.getVersionId(), config);
+        themeService.compileUsage(site.siteId(), request.getVersionId(), config);
         knowledgeJdbcTemplate.update("""
             UPDATE knowledge_portal_config_version SET status='archived'
             WHERE site_id=? AND status='published'
@@ -261,6 +264,7 @@ public class PortalSiteService {
         compileScope(site, versionId, source);
         extensionService.compileUsage(site.siteId(), versionId, source);
         codePackageService.compileUsage(site.siteId(), versionId, source);
+        themeService.compileUsage(site.siteId(), versionId, source);
         knowledgeJdbcTemplate.update("""
             UPDATE knowledge_portal_config_version SET status='archived'
             WHERE site_id=? AND status='published' AND config_version_id<>?
@@ -305,8 +309,20 @@ public class PortalSiteService {
 
     private Map<String, Object> bootstrap(Site site, int versionNo, JsonNode config, PortalContentScope scope,
                                            String pageSlug, boolean preview, Long previewVersionId) {
-        JsonNode page = config.path("pages").path(StringUtils.hasText(pageSlug) ? pageSlug : "home");
-        if (page.isMissingNode()) throw new KmaException(404, "PORTAL_PAGE_NOT_FOUND");
+        String requestedPage = StringUtils.hasText(pageSlug) ? pageSlug : "home";
+        JsonNode page;
+        if (schemaVersion(config) == 4) {
+            String template = config.path("routes").path(requestedPage).asText("");
+            if (!StringUtils.hasText(template)) throw new KmaException(404, "PORTAL_PAGE_NOT_FOUND");
+            page = objectMapper.valueToTree(Map.of(
+                "slug", requestedPage,
+                "kind", requestedPage,
+                "title", requestedPage,
+                "template", template));
+        } else {
+            page = config.path("pages").path(requestedPage);
+            if (page.isMissingNode()) throw new KmaException(404, "PORTAL_PAGE_NOT_FOUND");
+        }
         Map<String, Object> result = new LinkedHashMap<>();
         Map<String, Object> siteView = new LinkedHashMap<>(site.view());
         JsonNode configuredSite = config.path("site");
@@ -329,6 +345,7 @@ public class PortalSiteService {
         resolvedExtensions.addAll(codePackageService.resolveBindings(page));
         result.put("extensions", resolvedExtensions);
         result.put("portalData", partyKnowledgeService.home(scope));
+        if (schemaVersion(config) == 4) result.put("themeRuntime", themeService.runtime(config, preview));
         if (preview) {
             result.put("preview", true);
             result.put("previewVersionId", previewVersionId);
@@ -339,7 +356,19 @@ public class PortalSiteService {
 
     public JsonNode page(String siteKey, String pageSlug) {
         Published published = published(siteKey);
-        JsonNode page = published.config().path("pages").path(pageSlug);
+        JsonNode page;
+        if (schemaVersion(published.config()) == 4) {
+            String template = published.config().path("routes").path(pageSlug).asText("");
+            if (template.isBlank()) throw new KmaException(404, "PORTAL_PAGE_NOT_FOUND");
+            ObjectNode themePage = objectMapper.createObjectNode();
+            themePage.put("slug", pageSlug);
+            themePage.put("kind", pageSlug);
+            themePage.put("title", pageSlug);
+            themePage.put("template", template);
+            page = themePage;
+        } else {
+            page = published.config().path("pages").path(pageSlug);
+        }
         if (page.isMissingNode()) throw new KmaException(404, "PORTAL_PAGE_NOT_FOUND");
         return page;
     }
@@ -575,7 +604,8 @@ public class PortalSiteService {
 
     private int schemaVersion(JsonNode config) {
         int version = config == null ? -1 : config.path("schemaVersion").asInt(-1);
-        if (version != 2 && version != 3) throw new KmaException(400, "PORTAL_SCHEMA_VERSION_UNSUPPORTED");
+        if (version != 2 && version != 3 && version != 4)
+            throw new KmaException(400, "PORTAL_SCHEMA_VERSION_UNSUPPORTED");
         return version;
     }
 
@@ -596,12 +626,13 @@ public class PortalSiteService {
         List<String> issues = new ArrayList<>(validator.validate(config, siteKey));
         issues.addAll(extensionService.validateReferences(config));
         issues.addAll(codePackageService.validateReferences(config));
+        issues.addAll(themeService.validateReference(config));
         return List.copyOf(issues);
     }
 
     private JsonNode preparePublishedConfig(JsonNode source, String siteKey) {
         JsonNode copy = source.deepCopy();
-        if (copy.path("theme").isObject()) {
+        if (schemaVersion(copy) < 4 && copy.path("theme").isObject()) {
             String customCss = copy.path("theme").path("customCss").asText("");
             ((com.fasterxml.jackson.databind.node.ObjectNode) copy.path("theme"))
                 .put("scopedCss", cssScopeService.scope(siteKey, customCss));

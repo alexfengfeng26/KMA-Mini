@@ -22,11 +22,18 @@ const failed = ref(false)
 let port: MessagePort | undefined
 
 const title = computed(() => props.extension?.displayName || props.extension?.extensionId || '自定义代码区块')
-const capabilities = computed(() => new Set(props.extension?.manifest.capabilities || props.inline?.manifest?.capabilities || ['page-context']))
+const capabilities = computed(
+  () =>
+    new Set(
+      props.extension?.manifest.capabilities || props.inline?.manifest?.capabilities || ['page-context'],
+    ),
+)
 const srcdoc = computed(() => (props.inline ? buildInlineSandboxDocument(props.inline) : undefined))
-const extensionIdentity = computed(() => props.extension
-  ? { id: props.extension.extensionId, version: props.extension.version }
-  : { id: `inline:${props.nodeId || 'sandbox'}`, version: 'draft' })
+const extensionIdentity = computed(() =>
+  props.extension
+    ? { id: props.extension.extensionId, version: props.extension.version }
+    : { id: `inline:${props.nodeId || 'sandbox'}`, version: 'draft' },
+)
 
 function response(id: string, ok: boolean, value?: unknown) {
   port?.postMessage({ type: 'kma-sdk-result', id, ok, value })
@@ -48,8 +55,10 @@ async function handleRequest(event: MessageEvent<{ id?: string; type?: string; p
       return
     }
     if ((type === 'contents' || type === 'portal.contents.list') && capabilities.value.has('contents')) {
-      const keyword = typeof event.data.payload === 'object' && event.data.payload
-        ? String((event.data.payload as { keyword?: unknown }).keyword || '').slice(0, 120) : ''
+      const keyword =
+        typeof event.data.payload === 'object' && event.data.payload
+          ? String((event.data.payload as { keyword?: unknown }).keyword || '').slice(0, 120)
+          : ''
       response(id, true, await portalExtensionContents(props.bootstrap.site.siteKey, keyword))
       return
     }
@@ -69,7 +78,10 @@ async function handleRequest(event: MessageEvent<{ id?: string; type?: string; p
         eventType: 'article_click',
         pageSlug: props.bootstrap.page.slug,
         targetId,
-        metadata: { extension: extensionIdentity.value.id, slot: props.nodeId || props.extension?.slotKey || 'sandbox' },
+        metadata: {
+          extension: extensionIdentity.value.id,
+          slot: props.nodeId || props.extension?.slotKey || 'sandbox',
+        },
       })
       response(id, true, { recorded: true })
       return

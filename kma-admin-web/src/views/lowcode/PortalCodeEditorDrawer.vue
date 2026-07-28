@@ -78,12 +78,15 @@ const previewCode = computed<PortalInlineCode>(() => ({
   files: { ...files },
   manifest: { capabilities: selectedCapabilities.value },
 }))
-const previewBootstrap = computed(() => ({
-  site: { siteKey: 'designer-preview', name: '设计器即时预览' },
-  page: { slug: 'preview' },
-  theme: { pack: 'party-authority', mode: 'light' },
-  portalData: {},
-} as unknown as PortalBootstrap))
+const previewBootstrap = computed(
+  () =>
+    ({
+      site: { siteKey: 'designer-preview', name: '设计器即时预览' },
+      page: { slug: 'preview' },
+      theme: { pack: 'party-authority', mode: 'light' },
+      portalData: {},
+    }) as unknown as PortalBootstrap,
+)
 
 function language(file: string) {
   if (file.endsWith('.html')) return 'html'
@@ -296,10 +299,16 @@ onBeforeUnmount(() => editorInstance?.dispose())
               <input type="file" accept=".zip,application/zip" @change="uploadZip" />
             </label>
             <el-button @click="validateSyntax">语法检查</el-button>
-            <el-button :disabled="editingInline ? false : !selectedPackage" type="primary" @click="saveAndScan">
+            <el-button
+              :disabled="editingInline ? false : !selectedPackage"
+              type="primary"
+              @click="saveAndScan"
+            >
               {{ editingInline ? '应用到草稿' : '保存并扫描' }}
             </el-button>
-            <el-button v-if="!editingInline" :disabled="!canPublish" type="success" @click="publish">发布版本</el-button>
+            <el-button v-if="!editingInline" :disabled="!canPublish" type="success" @click="publish"
+              >发布版本</el-button
+            >
           </div>
           <div class="code-editor__capabilities">
             <span>Portal SDK</span>
@@ -317,11 +326,14 @@ onBeforeUnmount(() => editorInstance?.dispose())
           <section class="code-editor__preview">
             <header>
               <strong>即时预览</strong>
-              <el-segmented v-model="previewWidth" :options="[
-                { label: '桌面', value: 1440 },
-                { label: '平板', value: 1024 },
-                { label: '手机', value: 390 },
-              ]" />
+              <el-segmented
+                v-model="previewWidth"
+                :options="[
+                  { label: '桌面', value: 1440 },
+                  { label: '平板', value: 1024 },
+                  { label: '手机', value: 390 },
+                ]"
+              />
             </header>
             <div class="code-editor__preview-stage">
               <PortalExtensionFrame
@@ -340,7 +352,9 @@ onBeforeUnmount(() => editorInstance?.dispose())
             type="error"
             :closable="false"
           />
-          <span v-else> 未保存代码正在隔离 iframe 中预览；网络、Cookie、Storage、父页面 DOM 与顶层跳转均被禁止。 </span>
+          <span v-else>
+            未保存代码正在隔离 iframe 中预览；网络、Cookie、Storage、父页面 DOM 与顶层跳转均被禁止。
+          </span>
         </footer>
       </section>
     </div>

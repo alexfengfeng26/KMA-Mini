@@ -295,8 +295,38 @@ export interface PortalSiteConfigV3 {
   packages: PackageReference[]
 }
 
-export type PortalSiteConfig = PortalSiteConfigV2 | PortalSiteConfigV3
-export type PortalPageConfig = CmsPageConfigV2 | LowCodePage
+export interface PortalSiteConfigV4 {
+  schemaVersion: 4
+  revision: string
+  site: PortalSiteConfigV2['site']
+  theme: { themeId: number; versionId: number }
+  routes: Record<string, string>
+  modules: Record<string, boolean>
+  contentScope: PortalSiteConfigV2['contentScope']
+  search: PortalSiteConfigV2['search']
+  assistant: PortalSiteConfigV2['assistant']
+}
+
+export interface PortalThemePage {
+  slug: string
+  kind: string
+  title: string
+  template: string
+}
+
+export interface PortalThemeRuntime {
+  versionId: number
+  versionNo: number
+  status: 'draft' | 'published'
+  manifest: { capabilities?: string[]; entry?: string }
+  checksum: string
+  themeKey: string
+  displayName: string
+  files: Record<string, string>
+}
+
+export type PortalSiteConfig = PortalSiteConfigV2 | PortalSiteConfigV3 | PortalSiteConfigV4
+export type PortalPageConfig = CmsPageConfigV2 | LowCodePage | PortalThemePage
 
 export interface PortalSiteSummary {
   siteId: number
@@ -313,7 +343,7 @@ export interface PortalConfigVersion {
   versionId: number
   versionNo: number
   status: 'draft' | 'reviewing' | 'published' | 'archived'
-  schemaVersion: 2 | 3
+  schemaVersion: 2 | 3 | 4
   checksum: string
   lockVersion: number
   changeNote?: string
@@ -327,8 +357,8 @@ export interface PortalBootstrap {
   site: PortalSiteSummary
   publishedVersion: number
   revision: string
-  schemaVersion: 2 | 3
-  shell: PortalSiteConfigV2['shell'] | PortalSiteConfigV3['shell']
+  schemaVersion: 2 | 3 | 4
+  shell: PortalSiteConfigV2['shell'] | PortalSiteConfigV3['shell'] | Record<string, never>
   theme: PortalSiteConfigV2['theme']
   modules: Record<string, boolean>
   search: PortalSiteConfigV2['search']
@@ -338,6 +368,8 @@ export interface PortalBootstrap {
   packages?: PackageReference[]
   extensions: ResolvedPortalExtension[]
   portalData: import('../api/party').PortalHome
+  themeData?: Record<string, unknown>
+  themeRuntime?: PortalThemeRuntime
   preview?: boolean
   previewVersion?: number
   previewVersionId?: number

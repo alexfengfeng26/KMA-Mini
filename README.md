@@ -20,9 +20,11 @@ KMA Mini（Knowledge Management AI）是一个面向本地开发、学习和内�
 
 ```mermaid
 flowchart LR
-  U[门户用户 / 管理员] --> FE[Vue 3 前端\n门户 + 控制台]
+  U[门户用户 / 管理员] --> FE[Vue 3 核心壳层\n认证 + 控制台]
+  FE --> TK[Portal Theme V4\n隔离 iframe + Portal SDK]
   FE --> API[Spring Boot API\n认证、治理、RAG、CMS]
-  API --> DB[(PostgreSQL + pgvector\nFlyway V1-V22)]
+  TK -->|受控消息网关| FE
+  API --> DB[(PostgreSQL + pgvector\nFlyway V1-V23)]
   API --> ST[本地存储 / MinIO]
   API --> MOD[Embedding / LLM / Reranker / OCR]
   WK[独立 Worker\n入库、重建、治理任务] --> DB
@@ -40,7 +42,7 @@ flowchart LR
 | 内容治理 | 内容草稿、审核、发布、下线、效力状态、专题、收藏、阅读历史与门户可见性 |
 | 知识处理 | 文件/文本入库、解析、分块、关键词、向量、版本化切换、任务租约、重试与死信 |
 | RAG | 中文词项分析、全文/向量召回、RRF 混合排序、可选重排、引用复核、无证据拒答、SSE 流式回答 |
-| 门户 CMS | 多站点页面、V3 响应式布局树、主题、受控组件、扩展包、草稿/审核/发布/回退、管理员真实预览 |
+| 门户 CMS | Portal Theme V4 全站 HTML/Liquid/KMA 标签主题、隔离 JavaScript、Portal SDK、ZIP 导入导出、DeepSeek 多文件提案、草稿/审核/发布/回退 |
 | 运维 | 健康探针、Prometheus 指标、调用与安全审计、存储对账、模型 Profile、RAG 评测 |
 
 ## 技术栈
@@ -48,7 +50,7 @@ flowchart LR
 | 层级 | 主要技术 |
 | --- | --- |
 | 后端 | JDK 21、Spring Boot 3.5、Spring Security、JDBC、MyBatis-Plus、Flyway、Springdoc |
-| 数据 | PostgreSQL 16+、pgvector、Flyway V1–V22 |
+| 数据 | PostgreSQL 16+、pgvector、Flyway V1–V23 |
 | 文档处理 | PDFBox、Apache POI、可选 OCR、Local/MinIO Storage SPI |
 | 前端 | Vue 3、TypeScript、Vite、Element Plus、Pinia、Vue Router、TanStack Query |
 | 测试 | JUnit 5、Spring Security Test、Testcontainers、Vitest、Playwright |
@@ -82,7 +84,7 @@ kma-admin-web/src/
 ├── views/       # 路由页面与管理工作台
 ├── api/         # OpenAPI 类型客户端、受控 fetch 与领域 API
 ├── stores/      # Pinia 身份、门户站点、运行时状态
-├── cms/         # 门户渲染、V3 布局树、组件与主题能力
+├── cms/         # V2/V3 兼容渲染、V4 Theme Kernel、KMA/Liquid 与 Portal SDK
 ├── router/      # 权限守卫、站点路由与遗留路由兼容
 └── security/    # 路由站点键、授权与安全辅助
 ```
@@ -105,7 +107,7 @@ createdb -U postgres kma_mini
 psql -U postgres -d kma_mini -c "CREATE EXTENSION IF NOT EXISTS vector;"
 ```
 
-应用启动时自动执行 Flyway V1–V22。Mini 的运行目标必须是 `kma_mini`；不要将本项目指向原多租户 `kma` 数据库。
+应用启动时自动执行 Flyway V1–V23。V23 为当前站点创建不可变全站主题版本，并将已发布 V3 原子转换为 V4；旧 V2/V3 版本保持可回退。Mini 的运行目标必须是 `kma_mini`；不要将本项目指向原多租户 `kma` 数据库。
 
 ### 2. 启动 API
 

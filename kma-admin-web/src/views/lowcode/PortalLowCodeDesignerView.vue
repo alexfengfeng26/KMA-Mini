@@ -633,7 +633,8 @@ function addSandbox(item: PortalCodePackage) {
 
 function addInlineSandbox() {
   if (!activePage.value) return
-  const parent = selectedNode.value && 'children' in selectedNode.value ? selectedNode.value : activePage.value.root
+  const parent =
+    selectedNode.value && 'children' in selectedNode.value ? selectedNode.value : activePage.value.root
   mutate(() => {
     const node: LayoutNode = {
       id: uniqueNodeId(activePage.value!.root, 'custom-code'),
@@ -644,7 +645,10 @@ function addInlineSandbox() {
       capabilities: ['page-context'],
       config: {},
       inline: defaultInlineCode(),
-      layout: { span: { desktop: 12, tablet: 8, mobile: 4 }, hidden: { desktop: false, tablet: false, mobile: false } },
+      layout: {
+        span: { desktop: 12, tablet: 8, mobile: 4 },
+        hidden: { desktop: false, tablet: false, mobile: false },
+      },
     }
     if (!insertNode(activePage.value!.root, parent.id, node)) return
     selectedNodeId.value = node.id
@@ -1426,7 +1430,9 @@ onBeforeUnmount(() => {
                 type="success"
                 :closable="false"
               />
-              <el-button type="primary" :disabled="!canEdit" @click="codeDrawerOpen = true">编辑代码与即时预览</el-button>
+              <el-button type="primary" :disabled="!canEdit" @click="codeDrawerOpen = true"
+                >编辑代码与即时预览</el-button
+              >
             </template>
             <el-alert
               title="属性由组件 Schema 约束；未知字段在发布校验时会被拒绝。"

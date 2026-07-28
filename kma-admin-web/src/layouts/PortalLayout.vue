@@ -22,12 +22,13 @@ const v3Bootstrap = computed(() => {
   const bootstrap = portalSite.bootstrap
   return bootstrap?.schemaVersion === 3 ? bootstrap : undefined
 })
+const v4Bootstrap = computed(() => portalSite.bootstrap?.schemaVersion === 4)
 const v3Shell = computed(() => v3Bootstrap.value?.shell as PortalSiteConfigV3['shell'] | undefined)
 </script>
 
 <template>
-  <div class="portal-shell">
-    <header class="portal-header">
+  <div class="portal-shell" :class="{ 'portal-shell--theme-v4': v4Bootstrap }">
+    <header v-if="!v4Bootstrap" class="portal-header">
       <LowCodeNode
         v-if="v3Bootstrap && v3Shell"
         :node="v3Shell.header"
@@ -40,9 +41,11 @@ const v3Shell = computed(() => v3Bootstrap.value?.shell as PortalSiteConfigV3['s
       </LowCodeNode>
       <PortalNavigationWidget v-else />
     </header>
-    <main class="portal-main"><router-view /></main>
+    <main class="portal-main" :class="{ 'portal-main--theme-v4': v4Bootstrap }">
+      <router-view />
+    </main>
     <LowCodeNode
-      v-if="v3Bootstrap && v3Shell"
+      v-if="!v4Bootstrap && v3Bootstrap && v3Shell"
       :node="v3Shell.footer"
       :bootstrap="v3Bootstrap"
       :symbols="v3Bootstrap.symbols"
@@ -51,6 +54,18 @@ const v3Shell = computed(() => v3Bootstrap.value?.shell as PortalSiteConfigV3['s
     >
       <template #core><PortalAccountWidget /></template>
     </LowCodeNode>
-    <PortalAccountWidget v-else />
+    <PortalAccountWidget v-else-if="!v4Bootstrap" />
   </div>
 </template>
+
+<style scoped>
+.portal-shell--theme-v4,
+.portal-main--theme-v4 {
+  min-height: 100vh;
+}
+
+.portal-main--theme-v4 {
+  margin: 0;
+  padding: 0;
+}
+</style>
