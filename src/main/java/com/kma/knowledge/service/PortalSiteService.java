@@ -225,6 +225,24 @@ public class PortalSiteService {
         Map<String, Object> candidate = version(site.siteId(), request.getVersionId(), false);
         if (!"reviewing".equals(candidate.get("status")) || candidate.get("reviewedAt") == null)
             throw new KmaException(409, "PORTAL_VERSION_NOT_APPROVED");
+        publishValidated(site, siteKey, request, "portal-site.publish");
+    }
+
+    /**
+     * Administrator-only fast path used by the theme studio.  It deliberately accepts only an
+     * editable draft, but retains the exact same validation, compilation and atomic pointer swap
+     * as the reviewed publication path above.
+     */
+    @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
+    public void publishImmediately(String siteKey, PortalVersionActionRequest request) {
+        Site site = lockSite(siteKey);
+        Map<String, Object> candidate = version(site.siteId(), request.getVersionId(), false);
+        if (!"draft".equals(candidate.get("status")))
+            throw new KmaException(409, "PORTAL_VERSION_NOT_DRAFT");
+        publishValidated(site, siteKey, request, "portal-site.publish-immediately");
+    }
+
+    private void publishValidated(Site site, String siteKey, PortalVersionActionRequest request, String auditAction) {
         JsonNode config = preparePublishedConfig(config(site.siteId(), request.getVersionId(), false), siteKey);
         assertValid(config, siteKey);
         knowledgeJdbcTemplate.update("""
@@ -250,7 +268,7 @@ public class PortalSiteService {
             SET current_published_version_id=?,updated_by=?,update_time=now()
             WHERE site_id=?
             """, request.getVersionId(), userId(), site.siteId());
-        audit("portal-site.publish", siteKey, request.getVersionId());
+        audit(auditAction, siteKey, request.getVersionId());
     }
 
     @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)

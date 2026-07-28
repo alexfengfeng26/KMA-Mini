@@ -11,6 +11,7 @@ import com.kma.knowledge.dto.PortalThemeFilesRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.ArrayList;
@@ -40,6 +43,13 @@ public class PortalThemeService {
     private final JdbcTemplate knowledgeJdbcTemplate;
     private final ObjectMapper objectMapper;
     private final SecurityAuditService auditService;
+
+    /**
+     * Development mother packages may live beside the source tree.  Production falls back to the
+     * immutable package resources when this directory is not present.
+     */
+    @Value("${knowledge.portal-theme-source-dir:src/main/resources/portal-themes}")
+    private String themeSourceDirectory;
 
     private record ThemePreset(String key, String name, String description, JsonNode manifest,
                                Map<String, String> files, String checksum) {}
@@ -118,7 +128,8 @@ public class PortalThemeService {
         List<Map<String, Object>> result = knowledgeJdbcTemplate.queryForList("""
             SELECT t.theme_id AS "themeId",t.theme_key AS "themeKey",t.display_name AS "displayName",
                    t.description,t.status,t.current_version_id AS "currentVersionId",
-                   v.version_no AS "versionNo",v.scan_status AS "scanStatus",v.status AS "versionStatus"
+                   v.version_no AS "versionNo",v.checksum AS "currentChecksum",
+                   v.scan_status AS "scanStatus",v.status AS "versionStatus"
             FROM knowledge_portal_theme t
             JOIN knowledge_portal_theme_version v ON v.theme_version_id=t.current_version_id
             WHERE t.site_id=? ORDER BY CASE t.theme_key WHEN 'heritage-red' THEN 0
@@ -152,9 +163,20 @@ public class PortalThemeService {
         return workspaceView(site, theme, themeVersionId, portalVersionId);
     }
 
+    @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
+    public Map<String, Object> publishedWorkspace(String siteKey, Long themeVersionId) {
+        Map<String, Object> site = requireSite(siteKey);
+        long siteId = ((Number) site.get("siteId")).longValue();
+        Map<String, Object> theme = requireThemeForVersion(siteId, themeVersionId);
+        Long portalVersionId = ((Number) site.get("publishedVersionId")).longValue();
+        return workspaceView(site, theme, themeVersionId, portalVersionId);
+    }
+
     /** Creates a new editable database version from the checked-in theme package without changing portal routing. */
     @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
     public Map<String, Object> syncLocalSource(String siteKey, String themeKey) {
+        if (!List.of("heritage-red", "governance-blue", "ink-night").contains(themeKey))
+            throw new KmaException(400, "PORTAL_THEME_LOCAL_SOURCE_UNAVAILABLE");
         Map<String, Object> site = requireSite(siteKey);
         long siteId = ((Number) site.get("siteId")).longValue();
         ensureBuiltInThemes(site);
@@ -647,8 +669,7 @@ public class PortalThemeService {
 
     private ThemePreset bundledTheme(String themeKey) {
         String root = "portal-themes/" + themeKey + "/";
-        ClassPathResource descriptor = new ClassPathResource(root + "theme.json");
-        try (InputStream input = descriptor.getInputStream()) {
+        try (InputStream input = openBundledThemeFile(themeKey, "theme.json")) {
             JsonNode source = objectMapper.readTree(input);
             if (!themeKey.equals(source.path("themeKey").asText()))
                 throw new KmaException(500, "PORTAL_THEME_LOCAL_SOURCE_INVALID");
@@ -665,8 +686,7 @@ public class PortalThemeService {
                 String path = PortalThemeSecurity.normalizePath(file.asText());
                 if (!StringUtils.hasText(path) || files.containsKey(path))
                     throw new KmaException(500, "PORTAL_THEME_LOCAL_SOURCE_INVALID");
-                ClassPathResource resource = new ClassPathResource(root + path);
-                try (InputStream fileInput = resource.getInputStream()) {
+                try (InputStream fileInput = openBundledThemeFile(themeKey, path)) {
                     files.put(path, new String(fileInput.readAllBytes(), StandardCharsets.UTF_8));
                 }
             }
@@ -677,6 +697,17 @@ public class PortalThemeService {
             if (ex instanceof KmaException kma) throw kma;
             throw new KmaException(500, "PORTAL_THEME_LOCAL_SOURCE_INVALID");
         }
+    }
+
+    private InputStream openBundledThemeFile(String themeKey, String relativePath) throws IOException {
+        String path = PortalThemeSecurity.normalizePath(relativePath);
+        if (!StringUtils.hasText(path)) throw new KmaException(500, "PORTAL_THEME_LOCAL_SOURCE_INVALID");
+        if (StringUtils.hasText(themeSourceDirectory)) {
+            Path root = Path.of(themeSourceDirectory).toAbsolutePath().normalize();
+            Path candidate = root.resolve(themeKey).resolve(path).normalize();
+            if (candidate.startsWith(root) && Files.isRegularFile(candidate)) return Files.newInputStream(candidate);
+        }
+        return new ClassPathResource("portal-themes/" + themeKey + "/" + path).getInputStream();
     }
 
     private ObjectNode convertToV4(ObjectNode source, Long themeId, Long themeVersionId) {

@@ -252,6 +252,7 @@ export interface PortalThemeCatalogItem {
   versionNo: number
   scanStatus: 'pending' | 'passed' | 'failed'
   versionStatus: 'draft' | 'published' | 'archived'
+  currentChecksum?: string
   published: boolean
   recommended: boolean
   localSourceAvailable: boolean
@@ -296,6 +297,21 @@ export function syncPortalThemeLocalSource(siteKey: string, themeKey: string) {
   return authorizedJson<PortalThemeWorkspace>(
     adminPath(siteKey, `/theme-workspace/${encodeURIComponent(themeKey)}/local-source/sync`),
     { method: 'POST' },
+  )
+}
+
+export function publishPortalThemeImmediately(
+  siteKey: string,
+  themeKey: string,
+  body: { themeVersionId: number; syncLocalSource: boolean },
+) {
+  return authorizedJson<PortalThemeWorkspace>(
+    adminPath(siteKey, `/theme-workspace/${encodeURIComponent(themeKey)}/publish-immediately`),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
   )
 }
 

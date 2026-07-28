@@ -14,12 +14,14 @@ import {
   proposePortalTheme,
   savePortalThemeWorkspace,
   syncPortalThemeLocalSource,
+  publishPortalThemeImmediately,
   type PortalThemeDesignProposal,
   type PortalThemeCatalogItem,
   type PortalThemeWorkspace,
 } from '../../api/portalSites'
 import type { PortalBootstrap, PortalThemeRuntime } from '../../cms/siteConfig'
 import { buildThemeDocument } from '../../cms/v4/themeRuntime'
+import { useAuthStore } from '../../stores/auth'
 
 const sites = ref<Array<{ siteKey: string; name: string }>>([])
 const siteKey = ref('default')
@@ -32,6 +34,7 @@ const routePage = ref('home')
 const previewWidth = ref(1024)
 const loading = ref(false)
 const saving = ref(false)
+const publishing = ref(false)
 const dirty = ref(false)
 const aiOpen = ref(false)
 const aiLoading = ref(false)
@@ -73,6 +76,21 @@ const portalStatus = computed(() => workspace.value?.portalVersion.status || 'dr
 const selectedTheme = computed(() =>
   themeCatalog.value.find((theme) => theme.themeKey === selectedThemeKey.value),
 )
+const auth = useAuthStore()
+const canDirectPublish = computed(() =>
+  ['portal-site:update', 'portal-page:edit', 'portal-code:edit', 'portal-site:publish'].every(
+    (permission) => auth.permissions.has('kma:admin') || auth.permissions.has(permission),
+  ),
+)
+const localSourceChanged = computed(() => {
+  const theme = selectedTheme.value
+  return Boolean(
+    theme?.localSourceAvailable &&
+    theme.localSourceChecksum &&
+    theme.currentChecksum &&
+    theme.localSourceChecksum !== theme.currentChecksum,
+  )
+})
 const previewSource = computed(() => {
   const bootstrap = previewBootstrap.value
   const current = workspace.value
@@ -245,6 +263,35 @@ async function syncLocalSource() {
   }
 }
 
+async function publishImmediately() {
+  const current = workspace.value
+  const theme = selectedTheme.value
+  if (!current || !theme) return
+  const publishEditorChanges = dirty.value
+  if (publishEditorChanges && !(await save())) return
+  const refreshed = workspace.value
+  if (!refreshed) return
+  publishing.value = true
+  try {
+    const result = await publishPortalThemeImmediately(siteKey.value, theme.themeKey, {
+      themeVersionId: refreshed.version.themeVersionId,
+      // An online edit is the explicit source of truth for this operation.  Otherwise snapshot
+      // a changed checked-out package before applying it.
+      syncLocalSource: !publishEditorChanges && localSourceChanged.value,
+    })
+    workspace.value = result
+    replaceFiles(result.files)
+    dirty.value = false
+    await loadThemeCatalog()
+    await loadPreview()
+    ElMessage.success('主题已原子发布，门户访客已看到新版本')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '立即发布失败；当前已发布门户未改变')
+  } finally {
+    publishing.value = false
+  }
+}
+
 async function loadPreview() {
   if (!workspace.value) return
   try {
@@ -273,6 +320,7 @@ async function save() {
     })
     workspace.value = result
     dirty.value = false
+    await loadThemeCatalog()
     await loadPreview()
     if (result.version.scanStatus !== 'passed') {
       ElMessage.warning('草稿已保存，但安全扫描未通过')
@@ -456,7 +504,16 @@ onBeforeUnmount(() => editorInstance?.dispose())
       <el-button type="warning" plain @click="aiOpen = true">AI 设计整站</el-button>
       <el-button v-if="aiUndoFiles" @click="undoAiProposal">撤销 AI</el-button>
       <el-button :loading="saving" @click="save">保存草稿</el-button>
-      <el-button v-if="portalStatus === 'draft'" type="primary" @click="act('submit')">
+      <el-button
+        v-if="canDirectPublish"
+        type="primary"
+        :loading="publishing"
+        :disabled="!workspace"
+        @click="publishImmediately"
+      >
+        {{ localSourceChanged && !dirty ? '同步并立即发布' : '立即发布' }}
+      </el-button>
+      <el-button v-else-if="portalStatus === 'draft'" type="primary" @click="act('submit')">
         保存并送审
       </el-button>
       <el-button
@@ -505,15 +562,22 @@ onBeforeUnmount(() => editorInstance?.dispose())
       <span class="theme-switcher__meta" :title="selectedTheme?.description">
         {{ selectedTheme?.description || '选择一个主题进入文件工作区' }}
       </span>
-      <el-tag v-if="selectedTheme?.localSourceAvailable" size="small" type="info">本地源码可同步</el-tag>
-      <el-tooltip :content="selectedTheme?.localSourceMessage || '从仓库资源目录创建新草稿，不覆盖已有版本'">
-        <el-button size="small" :disabled="!selectedTheme?.localSourceAvailable" @click="syncLocalSource">
-          从本地源码创建草稿
+      <el-tag v-if="localSourceChanged" size="small" type="warning">本地有未发布变更</el-tag>
+      <el-tag v-else-if="selectedTheme?.localSourceAvailable" size="small" type="success"
+        >本地源码已同步</el-tag
+      >
+      <template v-if="!canDirectPublish">
+        <el-tooltip
+          :content="selectedTheme?.localSourceMessage || '从仓库资源目录创建新草稿，不覆盖已有版本'"
+        >
+          <el-button size="small" :disabled="!selectedTheme?.localSourceAvailable" @click="syncLocalSource">
+            同步本地源码
+          </el-button>
+        </el-tooltip>
+        <el-button size="small" type="primary" plain :disabled="!workspace" @click="applyTheme">
+          应用到门户草稿
         </el-button>
-      </el-tooltip>
-      <el-button size="small" type="primary" plain :disabled="!workspace" @click="applyTheme">
-        应用为门户主题
-      </el-button>
+      </template>
     </section>
 
     <section class="studio-grid">

@@ -2,10 +2,12 @@ package com.kma.knowledge.controller;
 
 import com.kma.common.result.ApiResult;
 import com.kma.knowledge.dto.PortalThemeFilesRequest;
+import com.kma.knowledge.dto.PortalThemeImmediatePublishRequest;
 import com.kma.knowledge.dto.PortalThemeDesignProposalRequest;
 import com.kma.knowledge.dto.PortalThemeDesignProposalResponse;
 import com.kma.knowledge.service.PortalThemeDesignService;
 import com.kma.knowledge.service.PortalThemeService;
+import com.kma.knowledge.service.PortalThemeReleaseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -35,6 +37,7 @@ import java.util.Map;
 public class PortalThemeAdminController {
     private final PortalThemeService service;
     private final PortalThemeDesignService designService;
+    private final PortalThemeReleaseService releaseService;
 
     @GetMapping
     @PreAuthorize("@ss.hasPermi('portal-site:update') and @ss.hasPermi('portal-page:edit')")
@@ -69,6 +72,15 @@ public class PortalThemeAdminController {
     public ApiResult<Map<String, Object>> syncLocalSource(@PathVariable String siteKey,
                                                            @PathVariable String themeKey) {
         return ApiResult.success(service.syncLocalSource(siteKey, themeKey));
+    }
+
+    @PostMapping("/{themeKey}/publish-immediately")
+    @PreAuthorize("@ss.hasPermi('portal-site:update') and @ss.hasPermi('portal-page:edit') " +
+        "and @ss.hasPermi('portal-code:edit') and @ss.hasPermi('portal-site:publish')")
+    public ApiResult<Map<String, Object>> publishImmediately(@PathVariable String siteKey,
+                                                               @PathVariable String themeKey,
+                                                               @Valid @RequestBody PortalThemeImmediatePublishRequest request) {
+        return ApiResult.success(releaseService.publishImmediately(siteKey, themeKey, request));
     }
 
     @PostMapping("/{themeVersionId}/ai-proposals")
