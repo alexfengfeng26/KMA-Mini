@@ -6,6 +6,7 @@ import com.kma.common.exception.KmaException;
 import com.kma.common.result.ApiResult;
 import com.kma.knowledge.dto.PortalCodeFilesRequest;
 import com.kma.knowledge.dto.PortalCodePackageRequest;
+import com.kma.knowledge.dto.PortalCodeValidationRequest;
 import com.kma.knowledge.service.PortalCodePackageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +51,12 @@ public class PortalCodePackageController {
     @PreAuthorize("@ss.hasPermi('portal-code:edit')")
     public ApiResult<Map<String, Object>> create(@Valid @RequestBody PortalCodePackageRequest request) {
         return ApiResult.success(service.create(request));
+    }
+
+    @PostMapping("/api/v1/admin/portal-code/validate")
+    @PreAuthorize("@ss.hasPermi('portal-code:edit')")
+    public ApiResult<Map<String, Object>> validateSource(@Valid @RequestBody PortalCodeValidationRequest request) {
+        return ApiResult.success(service.validateEditorSource(request.getFiles(), request.getManifest()));
     }
 
     @GetMapping("/api/v1/admin/portal-code-packages/{packageId}")

@@ -196,9 +196,16 @@ public class PortalSiteConfigValidator {
             validateActions(node.path("actions"), path, issues);
         }
         if ("sandbox".equals(type)) {
-            if (!IDENTIFIER.matcher(node.path("packageId").asText("")).matches()
-                || !StringUtils.hasText(node.path("version").asText()))
+            String source = node.path("source").asText("package");
+            if (!Set.of("package", "inline").contains(source)) {
+                issues.add(path + " 沙箱来源不合法");
+            } else if ("package".equals(source) && (!IDENTIFIER.matcher(node.path("packageId").asText("")).matches()
+                || !StringUtils.hasText(node.path("version").asText()))) {
                 issues.add(path + " 沙箱包标识或版本不合法");
+            } else if ("inline".equals(source)) {
+                PortalCodeSecurity.validateInline(node.path("inline"))
+                    .forEach(issue -> issues.add(path + " " + issue));
+            }
             int height = node.path("height").asInt(360);
             if (height < 120 || height > 1200) issues.add(path + " 沙箱高度必须为 120–1200");
         }

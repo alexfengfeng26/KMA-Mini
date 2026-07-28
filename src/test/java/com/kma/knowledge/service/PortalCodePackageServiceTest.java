@@ -128,6 +128,16 @@ class PortalCodePackageServiceTest {
     }
 
     @Test
+    void validatesEditorSourceWithoutPersistingIt() {
+        var result = service.validateEditorSource(Map.of(
+            "index.html", "<main>safe</main>",
+            "main.js", "fetch('/not-allowed')"), new ObjectMapper().createObjectNode());
+
+        assertThat(result).containsEntry("valid", false);
+        assertThat((List<?>) result.get("issues")).anyMatch(issue -> issue.toString().contains("fetch"));
+    }
+
+    @Test
     void rejectsZipPathTraversal() throws Exception {
         stubPackage();
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();

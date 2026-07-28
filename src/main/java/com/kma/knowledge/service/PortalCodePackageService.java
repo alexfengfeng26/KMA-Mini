@@ -76,6 +76,13 @@ public class PortalCodePackageService {
             """);
     }
 
+    /** Stateless validation for the editor; it never stores source or audit payloads. */
+    public Map<String, Object> validateEditorSource(Map<String, String> files, JsonNode manifest) {
+        List<String> issues = PortalCodeSecurity.validate(files, manifest, MAX_FILES, MAX_EXPANDED_BYTES);
+        return Map.of("valid", issues.isEmpty(), "issues", issues,
+            "allowedCapabilities", PortalCodeSecurity.CAPABILITIES);
+    }
+
     public Map<String, Object> get(Long packageId) {
         Map<String, Object> result = new LinkedHashMap<>(requirePackage(packageId));
         result.put("versions", knowledgeJdbcTemplate.queryForList("""
@@ -144,12 +151,12 @@ public class PortalCodePackageService {
 
     @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
     public Map<String, Object> scan(Long packageId, Long versionId) {
-        requireVersion(packageId, versionId, "draft");
+        Map<String, Object> candidate = requireVersion(packageId, versionId, "draft");
         List<Map<String, Object>> files = knowledgeJdbcTemplate.queryForList("""
             SELECT file_path AS "filePath",mime_type AS "mimeType",content
             FROM knowledge_portal_code_file WHERE code_version_id=?
             """, versionId);
-        List<String> issues = scanFiles(files);
+        List<String> issues = scanFiles(files, objectMapper.valueToTree(candidate.get("manifest")));
         String status = issues.isEmpty() ? "passed" : "failed";
         knowledgeJdbcTemplate.update("""
             UPDATE knowledge_portal_code_version
@@ -399,28 +406,12 @@ public class PortalCodePackageService {
         return index < 0 ? "" : path.substring(index + 1).toLowerCase(Locale.ROOT);
     }
 
-    private List<String> scanFiles(List<Map<String, Object>> files) {
-        List<String> issues = new ArrayList<>();
-        boolean entryFound = false;
-        for (Map<String, Object> file : files) {
-            String path = String.valueOf(file.get("filePath"));
-            byte[] content = (byte[]) file.get("content");
-            if ("index.html".equals(path)) entryFound = true;
-            String ext = extension(path);
-            if (!Set.of("html", "css", "js", "json", "svg").contains(ext)) continue;
-            String text = new String(content, StandardCharsets.UTF_8).toLowerCase(Locale.ROOT);
-            if ("js".equals(ext)) {
-                SCRIPT_DENYLIST.stream().filter(text::contains)
-                    .forEach(token -> issues.add(path + " 包含禁止能力: " + token));
-            }
-            if ("html".equals(ext) && (text.contains("<form") || text.contains("<iframe")
-                || text.matches("(?s).*<meta[^>]+http-equiv\\s*=\\s*['\"]?refresh.*")))
-                issues.add(path + " 包含禁止的表单、iframe 或刷新跳转");
-            if ("css".equals(ext) && (text.contains("@import") || text.matches("(?s).*url\\s*\\(\\s*['\"]?https?://.*")))
-                issues.add(path + " 包含远程样式资源");
-        }
-        if (!entryFound) issues.add("缺少 index.html");
-        return List.copyOf(issues);
+    private List<String> scanFiles(List<Map<String, Object>> files, JsonNode manifest) {
+        Map<String, String> source = new LinkedHashMap<>();
+        for (Map<String, Object> file : files)
+            source.put(String.valueOf(file.get("filePath")),
+                new String((byte[]) file.get("content"), StandardCharsets.UTF_8));
+        return PortalCodeSecurity.validate(source, manifest, MAX_FILES, MAX_EXPANDED_BYTES);
     }
 
     private Map<String, Object> requirePackage(Long packageId) {

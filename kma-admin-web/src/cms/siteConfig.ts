@@ -125,12 +125,21 @@ export interface ComponentNode extends LowCodeNodeBase {
 
 export interface SandboxNode extends LowCodeNodeBase {
   type: 'sandbox'
-  packageId: string
-  version: string
+  source?: 'package' | 'inline'
+  packageId?: string
+  version?: string
   height?: number
   capabilities?: string[]
   config?: Record<string, string | number | boolean>
+  inline?: PortalInlineCode
 }
+
+export interface PortalInlineCode {
+  files: Record<string, string>
+  manifest?: { capabilities?: PortalSandboxCapability[] }
+}
+
+export type PortalSandboxCapability = 'page-context' | 'contents' | 'search' | 'ask' | 'analytics'
 
 export interface SymbolReferenceNode extends LowCodeNodeBase {
   type: 'symbol-ref'

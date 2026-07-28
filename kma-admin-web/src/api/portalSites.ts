@@ -346,6 +346,23 @@ export function portalCodeAction(
   )
 }
 
+export interface PortalCodeValidationResult {
+  valid: boolean
+  issues: string[]
+  allowedCapabilities: string[]
+}
+
+export function validatePortalCodeSource(body: {
+  files: Record<string, string>
+  manifest?: Record<string, unknown>
+}) {
+  return authorizedJson<PortalCodeValidationResult>('/api/v1/admin/portal-code/validate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
 export function portalBatchData(
   siteKey: string,
   queries: Array<{ id: string; source: string; filters?: Record<string, string> }>,

@@ -48,7 +48,7 @@ const blockComponent = computed(() => {
 })
 const extension = computed<ResolvedPortalExtension | undefined>(() => {
   const node = props.node
-  if (node.type !== 'sandbox') return undefined
+  if (node.type !== 'sandbox' || node.source === 'inline') return undefined
   return props.bootstrap.extensions.find(
     (item) => item.extensionId === node.packageId && item.version === node.version,
   )
@@ -149,14 +149,24 @@ const visibilityClasses = computed(() => ({
     </div>
 
     <PortalExtensionFrame
+      v-else-if="node.type === 'sandbox' && node.source === 'inline' && node.inline"
+      :inline="node.inline"
+      :node-id="node.id"
+      :config="node.config"
+      :bootstrap="bootstrap"
+    />
+
+    <PortalExtensionFrame
       v-else-if="node.type === 'sandbox' && extension"
       :extension="extension"
+      :node-id="node.id"
+      :config="node.config"
       :bootstrap="bootstrap"
     />
 
     <div v-else-if="node.type === 'sandbox'" class="low-code-node__fallback">
       <strong>沙箱组件不可用</strong>
-      <span>{{ node.packageId }}@{{ node.version }} 未出现在当前发布目录。</span>
+      <span>{{ node.packageId || '代码区块' }}@{{ node.version || '草稿' }} 未出现在当前发布目录。</span>
     </div>
 
     <div v-else-if="node.type === 'symbol-ref' && symbolCycle" class="low-code-node__fallback">

@@ -36,6 +36,7 @@ import {
   type DesignerDropPosition,
 } from '../../cms/v3/designerTree'
 import { componentPropertyFields } from '../../cms/v3/componentPropertySchema'
+import { defaultInlineCode } from '../../cms/portalSandbox'
 import { migratePortalConfigV2ToV3 } from '../../cms/v3/migrateV2'
 import {
   PREVIEW_WIDTH_MAX,
@@ -140,6 +141,11 @@ const activePage = computed<LowCodePage | undefined>(() => {
 const selectedNode = computed(() =>
   activePage.value && selectedNodeId.value
     ? findNode(activePage.value.root, selectedNodeId.value)
+    : undefined,
+)
+const selectedInlineCode = computed(() =>
+  selectedNode.value?.type === 'sandbox' && selectedNode.value.source === 'inline'
+    ? selectedNode.value.inline
     : undefined,
 )
 const selectedComponentFields = computed(() =>
@@ -598,6 +604,7 @@ function addSandbox(item: PortalCodePackage) {
     const node: LayoutNode = {
       id: uniqueNodeId(activePage.value!.root, item.packageKey),
       type: 'sandbox',
+      source: 'package',
       name: item.displayName,
       packageId: item.packageKey,
       version: item.currentVersion!,
@@ -621,6 +628,36 @@ function addSandbox(item: PortalCodePackage) {
         version: item.currentVersion!,
         source: 'site',
       })
+  })
+}
+
+function addInlineSandbox() {
+  if (!activePage.value) return
+  const parent = selectedNode.value && 'children' in selectedNode.value ? selectedNode.value : activePage.value.root
+  mutate(() => {
+    const node: LayoutNode = {
+      id: uniqueNodeId(activePage.value!.root, 'custom-code'),
+      type: 'sandbox',
+      source: 'inline',
+      name: '自定义代码区块',
+      height: 360,
+      capabilities: ['page-context'],
+      config: {},
+      inline: defaultInlineCode(),
+      layout: { span: { desktop: 12, tablet: 8, mobile: 4 }, hidden: { desktop: false, tablet: false, mobile: false } },
+    }
+    if (!insertNode(activePage.value!.root, parent.id, node)) return
+    selectedNodeId.value = node.id
+  })
+  codeDrawerOpen.value = true
+}
+
+function applyInlineCode(value: NonNullable<typeof selectedInlineCode.value>) {
+  const node = selectedNode.value
+  if (!activePage.value || node?.type !== 'sandbox' || node.source !== 'inline') return
+  mutate(() => {
+    node.inline = cloneNode(value)
+    node.capabilities = value.manifest?.capabilities || ['page-context']
   })
 }
 
@@ -1178,6 +1215,13 @@ onBeforeUnmount(() => {
               </button>
             </div>
           </template>
+          <h3>页面自定义</h3>
+          <div class="low-code-palette__grid">
+            <button :disabled="!canEdit" @dblclick="addInlineSandbox">
+              <strong>自定义代码区块</strong>
+              <small>HTML · CSS · 原生 JS</small>
+            </button>
+          </div>
         </div>
 
         <div v-else class="low-code-symbols">
@@ -1376,6 +1420,14 @@ onBeforeUnmount(() => {
                 </el-select>
               </el-form-item>
             </template>
+            <template v-else-if="selectedNode.type === 'sandbox' && selectedNode.source === 'inline'">
+              <el-alert
+                title="内联代码仅在当前页面生效，运行于隔离 iframe；可使用受控 Portal SDK。"
+                type="success"
+                :closable="false"
+              />
+              <el-button type="primary" :disabled="!canEdit" @click="codeDrawerOpen = true">编辑代码与即时预览</el-button>
+            </template>
             <el-alert
               title="属性由组件 Schema 约束；未知字段在发布校验时会被拒绝。"
               type="info"
@@ -1529,7 +1581,13 @@ onBeforeUnmount(() => {
       :can-edit="canEdit"
       @apply="applyAiProposal"
     />
-    <PortalCodeEditorDrawer v-model="codeDrawerOpen" @changed="refreshCodePackages" />
+    <PortalCodeEditorDrawer
+      v-model="codeDrawerOpen"
+      :inline-code="selectedInlineCode"
+      :inline-node-id="selectedNode?.id"
+      @changed="refreshCodePackages"
+      @save-inline="applyInlineCode"
+    />
   </div>
 </template>
 
