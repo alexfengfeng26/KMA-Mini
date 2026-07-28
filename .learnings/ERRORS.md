@@ -1883,3 +1883,52 @@ PowerShell command exited with code 1 before producing diagnostic output.
 - **Notes**: 已拆分诊断命令。
 
 ---
+## [ERR-20260728-PS1] powershell-readonly-verification
+
+**Logged**: 2026-07-28T16:27:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+Combined PowerShell verification object had an unmatched parenthesis and did not execute.
+
+### Error
+```
+ParserError: Missing closing ')' in expression.
+```
+
+### Context
+- A final read-only readiness, JDBC connection and Git tracking check was composed as one PowerShell expression.
+
+### Suggested Fix
+Assign command results to named variables before constructing the output object; avoid nested subexpressions in verification commands.
+
+### Metadata
+- Reproducible: yes
+- Related Files: .learnings/ERRORS.md
+
+---
+## [ERR-20260728-NPM1] frontend-check-working-directory
+
+**Logged**: 2026-07-28T16:36:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: tests
+
+### Summary
+Frontend npm validation was invoked from the backend repository root, where no package.json exists.
+
+### Error
+```
+npm error enoent Could not read package.json
+```
+
+### Suggested Fix
+Run frontend npm commands with `kma-admin-web` as the working directory.
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/package.json
+
+---

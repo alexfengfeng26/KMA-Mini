@@ -35,6 +35,7 @@ const previewWidth = ref(1024)
 const loading = ref(false)
 const saving = ref(false)
 const publishing = ref(false)
+const refreshingThemeStatus = ref(false)
 const dirty = ref(false)
 const aiOpen = ref(false)
 const aiLoading = ref(false)
@@ -82,15 +83,7 @@ const canDirectPublish = computed(() =>
     (permission) => auth.permissions.has('kma:admin') || auth.permissions.has(permission),
   ),
 )
-const localSourceChanged = computed(() => {
-  const theme = selectedTheme.value
-  return Boolean(
-    theme?.localSourceAvailable &&
-    theme.localSourceChecksum &&
-    theme.currentChecksum &&
-    theme.localSourceChecksum !== theme.currentChecksum,
-  )
-})
+const localSourceChanged = computed(() => selectedTheme.value?.localSourceChanged === true)
 const previewSource = computed(() => {
   const bootstrap = previewBootstrap.value
   const current = workspace.value
@@ -181,6 +174,18 @@ async function loadThemeCatalog() {
   }
 }
 
+async function refreshThemeStatus() {
+  refreshingThemeStatus.value = true
+  try {
+    await loadThemeCatalog()
+    ElMessage.success('本地主题状态已刷新')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '本地主题状态刷新失败')
+  } finally {
+    refreshingThemeStatus.value = false
+  }
+}
+
 async function loadWorkspace() {
   loading.value = true
   try {
@@ -252,11 +257,12 @@ async function syncLocalSource() {
   }
   try {
     const result = await syncPortalThemeLocalSource(siteKey.value, theme.themeKey)
-    workspace.value = result
-    replaceFiles(result.files)
-    dirty.value = false
     await loadThemeCatalog()
-    await loadPreview()
+    if (result.result === 'unchanged') {
+      ElMessage.success('本地主题源码已同步，未创建新版本')
+      return
+    }
+    await loadWorkspace()
     ElMessage.success('已从本地主题源码创建新的草稿版本，尚未应用或发布')
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '本地源码同步失败')
@@ -284,7 +290,13 @@ async function publishImmediately() {
     dirty.value = false
     await loadThemeCatalog()
     await loadPreview()
-    ElMessage.success('主题已原子发布，门户访客已看到新版本')
+    ElMessage.success(
+      result.publishResult === 'synced'
+        ? '已同步本地源码并原子发布，门户访客已看到新版本'
+        : result.publishResult === 'unchanged'
+          ? '本地源码已同步，已直接发布当前主题版本'
+          : '主题已原子发布，门户访客已看到新版本',
+    )
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '立即发布失败；当前已发布门户未改变')
   } finally {
@@ -566,6 +578,9 @@ onBeforeUnmount(() => editorInstance?.dispose())
       <el-tag v-else-if="selectedTheme?.localSourceAvailable" size="small" type="success"
         >本地源码已同步</el-tag
       >
+      <el-button size="small" :loading="refreshingThemeStatus" @click="refreshThemeStatus">
+        刷新本地状态
+      </el-button>
       <template v-if="!canDirectPublish">
         <el-tooltip
           :content="selectedTheme?.localSourceMessage || '从仓库资源目录创建新草稿，不覆盖已有版本'"

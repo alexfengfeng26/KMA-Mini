@@ -240,6 +240,7 @@ export interface PortalThemeWorkspace {
   }
   portalVersion: PortalConfigVersion
   files: Record<string, string>
+  publishResult?: 'synced' | 'unchanged' | 'publishedExisting'
 }
 
 export interface PortalThemeCatalogItem {
@@ -259,6 +260,14 @@ export interface PortalThemeCatalogItem {
   localSourceStatus: 'available' | 'invalid' | 'unavailable' | 'not-bundled'
   localSourceChecksum?: string
   localSourceMessage?: string
+  localSourceChanged: boolean
+  localSourceCheckedAt?: string
+}
+
+export interface PortalThemeSyncResult {
+  result: 'synced' | 'unchanged'
+  themeVersionId: number
+  checksum: string
 }
 
 export function listPortalThemes(siteKey: string) {
@@ -294,7 +303,7 @@ export function applyPortalTheme(siteKey: string, themeVersionId: number) {
 }
 
 export function syncPortalThemeLocalSource(siteKey: string, themeKey: string) {
-  return authorizedJson<PortalThemeWorkspace>(
+  return authorizedJson<PortalThemeSyncResult>(
     adminPath(siteKey, `/theme-workspace/${encodeURIComponent(themeKey)}/local-source/sync`),
     { method: 'POST' },
   )

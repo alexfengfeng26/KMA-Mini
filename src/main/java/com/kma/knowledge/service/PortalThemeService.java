@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -40,6 +41,7 @@ import java.util.zip.ZipOutputStream;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "knowledge", name = "enabled", havingValue = "true", matchIfMissing = false)
 public class PortalThemeService {
+    private static final List<String> BUILT_IN_THEME_KEYS = List.of("heritage-red", "governance-blue", "ink-night");
     private final JdbcTemplate knowledgeJdbcTemplate;
     private final ObjectMapper objectMapper;
     private final SecurityAuditService auditService;
@@ -55,6 +57,8 @@ public class PortalThemeService {
                                Map<String, String> files, String checksum) {}
 
     private record ThemeSourceStatus(boolean available, String status, String checksum, String message) {}
+
+    public record ThemeSourceSyncResult(Long themeVersionId, String result, String checksum) {}
 
 
     @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
@@ -135,6 +139,7 @@ public class PortalThemeService {
             WHERE t.site_id=? ORDER BY CASE t.theme_key WHEN 'heritage-red' THEN 0
               WHEN 'governance-blue' THEN 1 WHEN 'ink-night' THEN 2 ELSE 9 END, t.display_name
             """, siteId);
+        String checkedAt = Instant.now().toString();
         result.forEach(theme -> {
             theme.put("published", java.util.Objects.equals(number(theme.get("themeId")), activeThemeId));
             theme.put("recommended", "heritage-red".equals(theme.get("themeKey")));
@@ -143,6 +148,9 @@ public class PortalThemeService {
             theme.put("localSourceStatus", source.status());
             theme.put("localSourceChecksum", source.checksum());
             theme.put("localSourceMessage", source.message());
+            theme.put("localSourceChanged", source.available()
+                && !java.util.Objects.equals(source.checksum(), theme.get("currentChecksum")));
+            theme.put("localSourceCheckedAt", checkedAt);
         });
         return result;
     }
@@ -172,26 +180,35 @@ public class PortalThemeService {
         return workspaceView(site, theme, themeVersionId, portalVersionId);
     }
 
-    /** Creates a new editable database version from the checked-in theme package without changing portal routing. */
+    /** Reports a no-op or creates one editable snapshot from the checked-in theme package. */
     @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
     public Map<String, Object> syncLocalSource(String siteKey, String themeKey) {
-        if (!List.of("heritage-red", "governance-blue", "ink-night").contains(themeKey))
+        ThemeSourceSyncResult result = syncLocalSourceVersion(siteKey, themeKey);
+        return Map.of("result", result.result(), "themeVersionId", result.themeVersionId(), "checksum", result.checksum());
+    }
+
+    /** Snapshots a source package only when its content checksum is new. */
+    @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
+    public ThemeSourceSyncResult syncLocalSourceVersion(String siteKey, String themeKey) {
+        if (!BUILT_IN_THEME_KEYS.contains(themeKey))
             throw new KmaException(400, "PORTAL_THEME_LOCAL_SOURCE_UNAVAILABLE");
         Map<String, Object> site = requireSite(siteKey);
         long siteId = ((Number) site.get("siteId")).longValue();
         ensureBuiltInThemes(site);
         Map<String, Object> theme = requireTheme(siteId, themeKey);
         ThemePreset source = bundledTheme(themeKey);
-        List<String> issues = PortalThemeSecurity.validate(source.files(), source.manifest());
-        if (!issues.isEmpty()) throw new KmaException(409, "PORTAL_THEME_LOCAL_SOURCE_INVALID");
+        String currentChecksum = knowledgeJdbcTemplate.queryForObject(
+            "SELECT checksum FROM knowledge_portal_theme_version WHERE theme_version_id=?", String.class,
+            theme.get("currentVersionId"));
+        if (java.util.Objects.equals(source.checksum(), currentChecksum))
+            return new ThemeSourceSyncResult(number(theme.get("currentVersionId")), "unchanged", source.checksum());
         Long versionId = createDraftVersion(theme, source);
         knowledgeJdbcTemplate.update("UPDATE knowledge_portal_theme SET current_version_id=?,updated_by=?,update_time=now() WHERE theme_id=?",
             versionId, userId(), theme.get("themeId"));
-        Long portalVersionId = ensureWorkspacePortalDraft(siteId);
         auditService.recordRequired("portal_theme", "info", "portal-theme.local-source.sync",
             "portal-theme-version:" + versionId, Map.of(), Map.of("siteKey", siteKey, "themeKey", themeKey,
                 "checksum", source.checksum()), Map.of());
-        return workspaceView(site, requireTheme(siteId, themeKey), versionId, portalVersionId);
+        return new ThemeSourceSyncResult(versionId, "synced", source.checksum());
     }
 
     public void assertEditable(String siteKey, Long themeVersionId, Integer expectedLockVersion) {
@@ -622,11 +639,12 @@ public class PortalThemeService {
 
     private void ensureBuiltInThemes(Map<String, Object> site) {
         long siteId = ((Number) site.get("siteId")).longValue();
-        for (ThemePreset preset : builtInPresets()) {
+        for (String themeKey : BUILT_IN_THEME_KEYS) {
             Integer exists = knowledgeJdbcTemplate.queryForObject(
                 "SELECT count(*) FROM knowledge_portal_theme WHERE site_id=? AND theme_key=?",
-                Integer.class, siteId, preset.key());
+                Integer.class, siteId, themeKey);
             if (exists != null && exists > 0) continue;
+            ThemePreset preset = bundledTheme(themeKey);
             Long themeId = knowledgeJdbcTemplate.queryForObject("""
                 INSERT INTO knowledge_portal_theme
                     (site_id,theme_key,display_name,description,created_by,updated_by)
@@ -648,19 +666,11 @@ public class PortalThemeService {
         }
     }
 
-    private List<ThemePreset> builtInPresets() {
-        return List.of(
-            bundledTheme("heritage-red"), bundledTheme("governance-blue"), bundledTheme("ink-night"));
-    }
-
     private ThemeSourceStatus localSourceStatus(String themeKey) {
-        if (!List.of("heritage-red", "governance-blue", "ink-night").contains(themeKey))
+        if (!BUILT_IN_THEME_KEYS.contains(themeKey))
             return new ThemeSourceStatus(false, "not-bundled", null, "非内置主题没有本地源码包");
         try {
             ThemePreset preset = bundledTheme(themeKey);
-            List<String> issues = PortalThemeSecurity.validate(preset.files(), preset.manifest());
-            if (!issues.isEmpty()) return new ThemeSourceStatus(false, "invalid", preset.checksum(),
-                "本地源码未通过安全扫描");
             return new ThemeSourceStatus(true, "available", preset.checksum(), null);
         } catch (Exception ex) {
             return new ThemeSourceStatus(false, "unavailable", null, "本地源码包不可读取");

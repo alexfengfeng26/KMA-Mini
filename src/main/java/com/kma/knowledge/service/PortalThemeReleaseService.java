@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
+import java.util.LinkedHashMap;
 
 /** Coordinates source synchronisation, configuration application and the shared atomic publisher. */
 @Service
@@ -24,9 +25,11 @@ public class PortalThemeReleaseService {
     public Map<String, Object> publishImmediately(String siteKey, String themeKey,
                                                    PortalThemeImmediatePublishRequest request) {
         Long targetVersionId = request.getThemeVersionId();
+        String publishResult = "publishedExisting";
         if (request.isSyncLocalSource()) {
-            Map<String, Object> synced = themeService.syncLocalSource(siteKey, themeKey);
-            targetVersionId = versionId(synced);
+            PortalThemeService.ThemeSourceSyncResult synced = themeService.syncLocalSourceVersion(siteKey, themeKey);
+            targetVersionId = synced.themeVersionId();
+            publishResult = synced.result();
         }
         Map<String, Object> applied = themeService.applyTheme(siteKey, targetVersionId);
         Long portalVersionId = portalVersionId(applied);
@@ -40,15 +43,9 @@ public class PortalThemeReleaseService {
             "portal-theme-version:" + targetVersionId, Map.of(), Map.of(
                 "siteKey", siteKey, "themeKey", themeKey, "themeVersionId", targetVersionId,
                 "localSourceSynced", request.isSyncLocalSource()), Map.of());
-        return themeService.publishedWorkspace(siteKey, targetVersionId);
-    }
-
-    @SuppressWarnings("unchecked")
-    private Long versionId(Map<String, Object> workspace) {
-        Object version = workspace.get("version");
-        if (!(version instanceof Map<?, ?> values) || !(values.get("themeVersionId") instanceof Number number))
-            throw new KmaException(500, "PORTAL_THEME_WORKSPACE_INVALID");
-        return number.longValue();
+        Map<String, Object> result = new LinkedHashMap<>(themeService.publishedWorkspace(siteKey, targetVersionId));
+        result.put("publishResult", publishResult);
+        return result;
     }
 
     @SuppressWarnings("unchecked")
