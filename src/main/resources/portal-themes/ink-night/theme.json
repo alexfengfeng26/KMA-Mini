@@ -1,0 +1,9 @@
+{
+  "themeKey": "ink-night",
+  "displayName": "墨玉夜读",
+  "description": "面向沉浸阅读的墨玉深色知识主题",
+  "kind": "portal-theme",
+  "entry": "layout.html",
+  "capabilities": ["page-context", "contents", "search", "ask", "analytics", "navigation"],
+  "files": ["layout.html", "pages/home.html", "pages/library.html", "pages/topics.html", "pages/ask.html", "pages/content.html", "pages/search.html", "pages/favorites.html", "pages/profile.html", "styles/theme.css", "scripts/theme.js"]
+}

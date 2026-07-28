@@ -1,3 +1,296 @@
+## [ERR-20260728-020] powershell_auth_token_header_shape
+
+**Logged**: 2026-07-28T00:00:00+08:00
+**Priority**: low
+**Status**: in_progress
+**Area**: infra
+
+### Summary
+PowerShell 管理员接口联调使用了错误的登录响应令牌字段，生成的 Authorization 请求头含有非 ASCII 内容。
+
+### Error
+```
+Request headers must contain only ASCII characters.
+```
+
+### Context
+- 调用主题工作区和应用主题接口前，从本地登录响应读取 access token。
+
+### Suggested Fix
+先读取登录响应的非敏感字段结构，使用实际 token 字段后再构造 Bearer Header。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/main/java/com/kma/common/security
+
+### Resolution
+- **Resolved**: 2026-07-28T00:00:00+08:00
+- **Commit/PR**: pending
+- **Notes**: PowerShell 插值必须使用 `$($login.data.accessToken)`；直接写 `$login.data.accessToken` 会把响应对象展开进 Header。
+
+---
+## [ERR-20260728-021] powershell_workdir_relative_path
+
+**Logged**: 2026-07-28T00:00:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+在已进入 `Kma_mini` 工作目录的命令中重复使用 `Kma_mini/.learnings` 前缀，导致日志读取路径不存在。
+
+### Error
+```
+Cannot find path '...\\Kma_mini\\Kma_mini\\.learnings\\ERRORS.md'
+```
+
+### Suggested Fix
+工作目录已是项目根目录时，使用 `.learnings/ERRORS.md`；组合检查命令应先确认相对路径基准。
+
+### Metadata
+- Reproducible: yes
+- Related Files: .learnings/ERRORS.md
+
+### Resolution
+- **Resolved**: 2026-07-28T00:00:00+08:00
+- **Notes**: 已改为项目根目录相对路径。
+
+---
+## [ERR-20260728-022] validation_workdir_mismatch
+
+**Logged**: 2026-07-28T00:00:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+前端验证命令分别在项目根目录和前端子目录执行时混用了相对路径，导致日志检索和 npm 脚本找不到目标文件。
+
+### Error
+```
+Could not read package.json: ... Kma_mini\\package.json
+rg: .learnings/ERRORS.md: ... path not found
+```
+
+### Suggested Fix
+前端质量命令固定在 `kma-admin-web` 目录执行；项目学习日志固定从 `Kma_mini` 根目录读取。
+
+### Metadata
+- Reproducible: yes
+- Related Files: .learnings/ERRORS.md, kma-admin-web/package.json
+
+### Resolution
+- **Resolved**: 2026-07-28T00:00:00+08:00
+- **Notes**: 已分离根目录日志检查与前端质量命令。
+
+---
+## [ERR-20260728-023] spring_boot_repackage_locked_jar
+
+**Logged**: 2026-07-28T00:00:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+运行中的 Mini 后端占用目标 JAR，Spring Boot repackage 无法创建新的可执行包。
+
+### Error
+```
+Unable to rename 'target/kma-mini-server-0.1.0-mini.jar' to '.jar.original'
+```
+
+### Suggested Fix
+重打包前先核对监听 8090 的进程属于 KMA Mini，仅停止该进程；打包完成后以相同数据库配置重启。
+
+### Metadata
+- Reproducible: yes
+- Related Files: target/kma-mini-server-0.1.0-mini.jar
+
+### Resolution
+- **Resolved**: 2026-07-28T00:00:00+08:00
+- **Notes**: 已转为受控停启 Mini 后端流程。
+
+---
+## [ERR-20260728-024] powershell_pid_reserved_variable
+
+**Logged**: 2026-07-28T00:00:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+进程诊断脚本使用了 PowerShell 只读自动变量 `$PID` 作为局部变量名。
+
+### Error
+```
+Cannot overwrite variable PID because it is read-only or constant.
+```
+
+### Suggested Fix
+使用任务专用变量名，例如 `$serverPid`，避免覆盖 PowerShell 自动变量。
+
+### Metadata
+- Reproducible: yes
+- Related Files: none
+
+### Resolution
+- **Resolved**: 2026-07-28T00:00:00+08:00
+- **Notes**: 后续进程检查改用 `$serverPid`。
+
+---
+## [ERR-20260728-025] powershell_rg_file_glob_argument
+
+**Logged**: 2026-07-28T00:00:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+PowerShell 没有展开 `application*.yml` 作为 ripgrep 的文件参数，造成路径语法错误。
+
+### Error
+```
+rg: src/main/resources/application*.yml: filename syntax is incorrect
+```
+
+### Suggested Fix
+对 ripgrep 使用 `-g 'application*.yml'` 过滤，或传入明确文件路径。
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/main/resources/application.yml
+
+### Resolution
+- **Resolved**: 2026-07-28T00:00:00+08:00
+- **Notes**: 后续配置读取使用明确路径。
+
+---
+## [ERR-20260728-026] mini_backend_readiness_timeout
+
+**Logged**: 2026-07-28T00:00:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: infra
+
+### Summary
+重启后的 Mini 后端未在 45 秒内达到 Readiness UP。
+
+### Error
+```
+Mini backend readiness did not become UP within 45 seconds.
+```
+
+### Suggested Fix
+检查新进程、应用日志与数据库认证后再决定是否调整启动环境。
+
+### Metadata
+- Reproducible: unknown
+- Related Files: logs/kma.log
+
+### Resolution
+- **Resolved**: 2026-07-28T00:00:00+08:00
+- **Notes**: JWT 配置会优先 Base64 解码；随机密钥改为 32 个随机字节的 Base64 字符串。
+
+---
+
+## [ERR-20260728-019] frontend_workdir_maven_and_stylelint
+
+**Logged**: 2026-07-28T00:00:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+组合验证在前端目录调用 Maven，且缩略卡片相邻规则未满足 stylelint 的空行规范。
+
+### Error
+```
+The term '.\mvnw.cmd' is not recognized.
+Expected empty line before rule.
+```
+
+### Context
+- 已格式化主题工作台，随后在 `kma-admin-web` 中同时执行 Maven 和前端检查。
+
+### Suggested Fix
+后端和前端质量命令使用各自工作目录；按 stylelint 规则保留相邻选择器之间的空行。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/views/theme/PortalThemeStudioView.vue
+
+### Resolution
+- **Resolved**: 2026-07-28T00:00:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已拆分命令并补充空行。
+
+---
+
+## [ERR-20260728-018] theme_catalog_prettier_check
+
+**Logged**: 2026-07-28T00:00:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+主题目录新增模板和样式通过语法检查前被 Prettier 格式检查拦截。
+
+### Error
+```
+Code style issues found in PortalThemeStudioView.vue.
+```
+
+### Context
+- 新增主题卡片选择器、未保存切换保护和应用主题按钮。
+
+### Suggested Fix
+对修改后的 Vue 文件运行仓库 Prettier 格式化，再执行全量前端检查。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/views/theme/PortalThemeStudioView.vue
+
+### Resolution
+- **Resolved**: 2026-07-28T00:00:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 待执行定向格式化与复检。
+
+---
+
+## [ERR-20260728-017] theme_studio_patch_context_mismatch
+
+**Logged**: 2026-07-28T00:00:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+主题工作台的大范围补丁依赖的模板上下文与实际换行结构不一致，安全校验拒绝应用补丁。
+
+### Error
+```
+apply_patch verification failed: Failed to find expected lines in PortalThemeStudioView.vue
+```
+
+### Context
+- 向现有主题工作台增加主题目录卡片和应用操作。
+- 审核按钮模板采用多行属性，未命中宽泛补丁锚点。
+
+### Suggested Fix
+先读取精确模板片段，再按导入、状态、函数、模板和样式分段应用小补丁。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src/views/theme/PortalThemeStudioView.vue
+
+### Resolution
+- **Resolved**: 2026-07-28T00:00:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已改用小范围补丁。
+
+---
+
 ## [ERR-20260727-001] spring_constructor_injection
 
 **Logged**: 2026-07-27T12:46:00+08:00
@@ -1556,5 +1849,37 @@ Property 'manifest' does not exist on type 'PortalThemeRuntime | undefined'.
 - **Resolved**: 2026-07-28T00:00:00+08:00
 - **Commit/PR**: pending
 - **Notes**: 已改为局部 `ThemeRuntime = NonNullable<...>`。
+
+---
+## [ERR-20260728-016] powershell_mixed_quote_search
+
+**Logged**: 2026-07-28T00:00:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+组合命令中的正则单双引号与 PowerShell 字符串边界冲突，命令在检索前中断。
+
+### Error
+```
+PowerShell command exited with code 1 before producing diagnostic output.
+```
+
+### Context
+- 同一命令中读取技能、执行带单双引号的 `rg` 正则并请求本地页面。
+- 复杂正则没有作为独立命令执行。
+
+### Suggested Fix
+将技能读取、路由检索和 HTTP 检查拆开，复杂 `rg` 模式使用 PowerShell 单引号字符串。
+
+### Metadata
+- Reproducible: yes
+- Related Files: kma-admin-web/src
+
+### Resolution
+- **Resolved**: 2026-07-28T00:00:00+08:00
+- **Commit/PR**: pending
+- **Notes**: 已拆分诊断命令。
 
 ---

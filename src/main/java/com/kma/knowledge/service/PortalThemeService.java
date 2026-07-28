@@ -10,14 +10,17 @@ import com.kma.common.security.SecurityAuditService;
 import com.kma.knowledge.dto.PortalThemeFilesRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
@@ -38,11 +41,25 @@ public class PortalThemeService {
     private final ObjectMapper objectMapper;
     private final SecurityAuditService auditService;
 
+    private record ThemePreset(String key, String name, String description, JsonNode manifest,
+                               Map<String, String> files, String checksum) {}
+
+    private record ThemeSourceStatus(boolean available, String status, String checksum, String message) {}
+
+
     @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
     public Map<String, Object> workspace(String siteKey) {
+        return workspace(siteKey, null);
+    }
+
+    @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
+    public Map<String, Object> workspace(String siteKey, String themeKey) {
         Map<String, Object> site = requireSite(siteKey);
         Long siteId = ((Number) site.get("siteId")).longValue();
-        Map<String, Object> theme = ensureTheme(site);
+        ensureBuiltInThemes(site);
+        Map<String, Object> theme = StringUtils.hasText(themeKey)
+            ? requireTheme(siteId, themeKey)
+            : recommendedTheme(siteId);
         List<Map<String, Object>> drafts = knowledgeJdbcTemplate.queryForList("""
             SELECT theme_version_id AS "themeVersionId",version_no AS "versionNo",status,
                    manifest_json AS manifest,checksum,scan_status AS "scanStatus",
@@ -53,7 +70,7 @@ public class PortalThemeService {
         Long themeVersionId;
         if (drafts.isEmpty()) themeVersionId = clonePublishedTheme(theme, siteId);
         else themeVersionId = ((Number) drafts.getFirst().get("themeVersionId")).longValue();
-        Long portalVersionId = ensurePortalDraft(siteId, themeVersionId);
+        Long portalVersionId = ensureWorkspacePortalDraft(siteId);
         return workspaceView(site, theme, themeVersionId, portalVersionId);
     }
 
@@ -61,7 +78,7 @@ public class PortalThemeService {
     public Map<String, Object> save(String siteKey, Long themeVersionId, PortalThemeFilesRequest request) {
         Map<String, Object> site = requireSite(siteKey);
         Long siteId = ((Number) site.get("siteId")).longValue();
-        Map<String, Object> theme = requireTheme(siteId);
+        Map<String, Object> theme = requireThemeForVersion(siteId, themeVersionId);
         Map<String, String> files = request.getFiles();
         JsonNode manifest = request.getManifest() == null ? objectMapper.createObjectNode() : request.getManifest();
         List<String> issues = PortalThemeSecurity.validate(files, manifest);
@@ -79,11 +96,80 @@ public class PortalThemeService {
         knowledgeJdbcTemplate.update(
             "DELETE FROM knowledge_portal_theme_file WHERE theme_version_id=?", themeVersionId);
         files.forEach((path, content) -> insertFile(themeVersionId, path, content == null ? "" : content));
-        Long portalVersionId = ensurePortalDraft(siteId, themeVersionId);
+        knowledgeJdbcTemplate.update("UPDATE knowledge_portal_theme SET current_version_id=?,updated_by=?,update_time=now() WHERE theme_id=?",
+            themeVersionId, userId(), theme.get("themeId"));
+        Long portalVersionId = ensureWorkspacePortalDraft(siteId);
         auditService.recordRequired("portal_theme", issues.isEmpty() ? "info" : "warning", "portal-theme.save",
             "portal-theme-version:" + themeVersionId, Map.of(), Map.of(
                 "siteKey", siteKey, "checksum", checksum(files), "issues", issues), Map.of());
         return workspaceView(site, theme, themeVersionId, portalVersionId);
+    }
+
+    @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
+    public List<Map<String, Object>> themes(String siteKey) {
+        Map<String, Object> site = requireSite(siteKey);
+        long siteId = ((Number) site.get("siteId")).longValue();
+        ensureBuiltInThemes(site);
+        Long activeThemeId = knowledgeJdbcTemplate.queryForObject("""
+            SELECT NULLIF(config_json->'theme'->>'themeId','')::bigint
+            FROM knowledge_portal_config_version
+            WHERE config_version_id=(SELECT current_published_version_id FROM knowledge_portal_site WHERE site_id=?)
+            """, Long.class, siteId);
+        List<Map<String, Object>> result = knowledgeJdbcTemplate.queryForList("""
+            SELECT t.theme_id AS "themeId",t.theme_key AS "themeKey",t.display_name AS "displayName",
+                   t.description,t.status,t.current_version_id AS "currentVersionId",
+                   v.version_no AS "versionNo",v.scan_status AS "scanStatus",v.status AS "versionStatus"
+            FROM knowledge_portal_theme t
+            JOIN knowledge_portal_theme_version v ON v.theme_version_id=t.current_version_id
+            WHERE t.site_id=? ORDER BY CASE t.theme_key WHEN 'heritage-red' THEN 0
+              WHEN 'governance-blue' THEN 1 WHEN 'ink-night' THEN 2 ELSE 9 END, t.display_name
+            """, siteId);
+        result.forEach(theme -> {
+            theme.put("published", java.util.Objects.equals(number(theme.get("themeId")), activeThemeId));
+            theme.put("recommended", "heritage-red".equals(theme.get("themeKey")));
+            ThemeSourceStatus source = localSourceStatus(String.valueOf(theme.get("themeKey")));
+            theme.put("localSourceAvailable", source.available());
+            theme.put("localSourceStatus", source.status());
+            theme.put("localSourceChecksum", source.checksum());
+            theme.put("localSourceMessage", source.message());
+        });
+        return result;
+    }
+
+    @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
+    public Map<String, Object> applyTheme(String siteKey, Long themeVersionId) {
+        Map<String, Object> site = requireSite(siteKey);
+        long siteId = ((Number) site.get("siteId")).longValue();
+        Map<String, Object> theme = requireThemeForVersion(siteId, themeVersionId);
+        Integer safe = knowledgeJdbcTemplate.queryForObject("""
+            SELECT count(*) FROM knowledge_portal_theme_version
+            WHERE theme_version_id=? AND scan_status='passed' AND status IN ('draft','published','archived')
+            """, Integer.class, themeVersionId);
+        if (safe == null || safe == 0) throw new KmaException(409, "PORTAL_THEME_SCAN_REQUIRED");
+        Long portalVersionId = applyThemeToPortalDraft(siteId, themeVersionId);
+        auditService.recordRequired("portal_theme", "info", "portal-theme.apply", "portal-theme-version:" + themeVersionId,
+            Map.of(), Map.of("siteKey", siteKey, "themeKey", theme.get("themeKey")), Map.of());
+        return workspaceView(site, theme, themeVersionId, portalVersionId);
+    }
+
+    /** Creates a new editable database version from the checked-in theme package without changing portal routing. */
+    @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
+    public Map<String, Object> syncLocalSource(String siteKey, String themeKey) {
+        Map<String, Object> site = requireSite(siteKey);
+        long siteId = ((Number) site.get("siteId")).longValue();
+        ensureBuiltInThemes(site);
+        Map<String, Object> theme = requireTheme(siteId, themeKey);
+        ThemePreset source = bundledTheme(themeKey);
+        List<String> issues = PortalThemeSecurity.validate(source.files(), source.manifest());
+        if (!issues.isEmpty()) throw new KmaException(409, "PORTAL_THEME_LOCAL_SOURCE_INVALID");
+        Long versionId = createDraftVersion(theme, source);
+        knowledgeJdbcTemplate.update("UPDATE knowledge_portal_theme SET current_version_id=?,updated_by=?,update_time=now() WHERE theme_id=?",
+            versionId, userId(), theme.get("themeId"));
+        Long portalVersionId = ensureWorkspacePortalDraft(siteId);
+        auditService.recordRequired("portal_theme", "info", "portal-theme.local-source.sync",
+            "portal-theme-version:" + versionId, Map.of(), Map.of("siteKey", siteKey, "themeKey", themeKey,
+                "checksum", source.checksum()), Map.of());
+        return workspaceView(site, requireTheme(siteId, themeKey), versionId, portalVersionId);
     }
 
     public void assertEditable(String siteKey, Long themeVersionId, Integer expectedLockVersion) {
@@ -274,17 +360,34 @@ public class PortalThemeService {
         return id;
     }
 
-    private Long ensurePortalDraft(Long siteId, Long themeVersionId) {
+    private Long createDraftVersion(Map<String, Object> theme, ThemePreset source) {
+        long themeId = ((Number) theme.get("themeId")).longValue();
+        Integer next = knowledgeJdbcTemplate.queryForObject(
+            "SELECT COALESCE(max(version_no),0)+1 FROM knowledge_portal_theme_version WHERE theme_id=?",
+            Integer.class, themeId);
+        Long id = knowledgeJdbcTemplate.queryForObject("""
+            INSERT INTO knowledge_portal_theme_version
+                (theme_id,version_no,status,manifest_json,compiled_json,checksum,scan_status,scan_result,
+                 file_count,expanded_size,created_by,scanned_at)
+            VALUES (?,?,'draft',?::jsonb,'{"compiler":"kma-liquid-v1","source":"local"}'::jsonb,
+                    ?,'passed','{"issues":[]}'::jsonb,?,?,?,now()) RETURNING theme_version_id
+            """, Long.class, themeId, next, json(source.manifest()), source.checksum(), source.files().size(),
+            source.files().values().stream().mapToLong(value -> value.getBytes(StandardCharsets.UTF_8).length).sum(),
+            userId());
+        source.files().forEach((path, content) -> insertFile(id, path, content));
+        return id;
+    }
+
+    private Long ensureWorkspacePortalDraft(Long siteId) {
         List<Long> existing = knowledgeJdbcTemplate.queryForList("""
             SELECT config_version_id FROM knowledge_portal_config_version
             WHERE site_id=? AND status='draft' AND schema_version=4
-              AND (config_json->'theme'->>'versionId')::bigint=?
             ORDER BY version_no DESC LIMIT 1
-            """, Long.class, siteId, themeVersionId);
+            """, Long.class, siteId);
         if (!existing.isEmpty()) return existing.getFirst();
         String source = knowledgeJdbcTemplate.queryForObject("""
             SELECT config_json::text FROM knowledge_portal_config_version
-            WHERE site_id=? ORDER BY CASE status WHEN 'published' THEN 0 ELSE 1 END,version_no DESC LIMIT 1
+            WHERE site_id=? AND status='published' ORDER BY version_no DESC LIMIT 1
             """, String.class, siteId);
         JsonNode config;
         try {
@@ -292,14 +395,8 @@ public class PortalThemeService {
         } catch (JsonProcessingException ex) {
             throw new KmaException(500, "PORTAL_CONFIG_CORRUPTED");
         }
-        if (!(config instanceof ObjectNode root)) throw new KmaException(409, "PORTAL_THEME_V4_REQUIRED");
-        if (root.path("schemaVersion").asInt() != 4) {
-            Long themeId = knowledgeJdbcTemplate.queryForObject(
-                "SELECT theme_id FROM knowledge_portal_theme_version WHERE theme_version_id=?",
-                Long.class, themeVersionId);
-            root = convertToV4(root, themeId, themeVersionId);
-        }
-        ((ObjectNode) root.path("theme")).put("versionId", themeVersionId);
+        if (!(config instanceof ObjectNode root) || root.path("schemaVersion").asInt() != 4)
+            throw new KmaException(409, "PORTAL_THEME_V4_REQUIRED");
         root.put("revision", "theme-draft-" + System.currentTimeMillis());
         Integer next = knowledgeJdbcTemplate.queryForObject("""
             SELECT COALESCE(max(version_no),0)+1 FROM knowledge_portal_config_version WHERE site_id=?
@@ -309,6 +406,32 @@ public class PortalThemeService {
                 (site_id,version_no,status,schema_version,config_json,checksum,change_note,created_by)
             VALUES (?,?,'draft',4,?::jsonb,?,'Portal Theme V4 工作区',?) RETURNING config_version_id
             """, Long.class, siteId, next, json(root), checksum(root), userId());
+    }
+
+    private Long applyThemeToPortalDraft(Long siteId, Long themeVersionId) {
+        Long portalVersionId = ensureWorkspacePortalDraft(siteId);
+        String source = knowledgeJdbcTemplate.queryForObject(
+            "SELECT config_json::text FROM knowledge_portal_config_version WHERE config_version_id=?", String.class,
+            portalVersionId);
+        JsonNode config;
+        try {
+            config = objectMapper.readTree(source);
+        } catch (JsonProcessingException ex) {
+            throw new KmaException(500, "PORTAL_CONFIG_CORRUPTED");
+        }
+        if (!(config instanceof ObjectNode root) || root.path("schemaVersion").asInt() != 4)
+            throw new KmaException(409, "PORTAL_THEME_V4_REQUIRED");
+        Long selectedThemeId = knowledgeJdbcTemplate.queryForObject(
+            "SELECT theme_id FROM knowledge_portal_theme_version WHERE theme_version_id=?", Long.class, themeVersionId);
+        ObjectNode selected = root.path("theme") instanceof ObjectNode current ? current : root.putObject("theme");
+        selected.put("themeId", selectedThemeId);
+        selected.put("versionId", themeVersionId);
+        root.put("revision", "theme-draft-" + System.currentTimeMillis());
+        knowledgeJdbcTemplate.update("""
+            UPDATE knowledge_portal_config_version SET config_json=?::jsonb,checksum=?,lock_version=lock_version+1
+            WHERE config_version_id=? AND status='draft'
+            """, json(root), checksum(root), portalVersionId);
+        return portalVersionId;
     }
 
     private Map<String, Object> workspaceView(Map<String, Object> site, Map<String, Object> theme,
@@ -407,11 +530,35 @@ public class PortalThemeService {
         return rows.getFirst();
     }
 
-    private Map<String, Object> requireTheme(Long siteId) {
+    private Map<String, Object> requireTheme(Long siteId, String themeKey) {
+        List<Map<String, Object>> rows = knowledgeJdbcTemplate.queryForList("""
+            SELECT theme_id AS "themeId",site_id AS "siteId",theme_key AS "themeKey",
+                   display_name AS "displayName",description,status,current_version_id AS "currentVersionId"
+            FROM knowledge_portal_theme WHERE site_id=? AND theme_key=?
+            """, siteId, themeKey);
+        if (rows.isEmpty()) throw new KmaException(404, "PORTAL_THEME_NOT_FOUND");
+        return rows.getFirst();
+    }
+
+    private Map<String, Object> requireThemeForVersion(Long siteId, Long themeVersionId) {
+        List<Map<String, Object>> rows = knowledgeJdbcTemplate.queryForList("""
+            SELECT t.theme_id AS "themeId",t.site_id AS "siteId",t.theme_key AS "themeKey",
+                   t.display_name AS "displayName",t.description,t.status,t.current_version_id AS "currentVersionId"
+            FROM knowledge_portal_theme t
+            JOIN knowledge_portal_theme_version v ON v.theme_id=t.theme_id
+            WHERE t.site_id=? AND v.theme_version_id=?
+            """, siteId, themeVersionId);
+        if (rows.isEmpty()) throw new KmaException(404, "PORTAL_THEME_VERSION_NOT_FOUND");
+        return rows.getFirst();
+    }
+
+    private Map<String, Object> recommendedTheme(Long siteId) {
         List<Map<String, Object>> rows = knowledgeJdbcTemplate.queryForList("""
             SELECT theme_id AS "themeId",site_id AS "siteId",theme_key AS "themeKey",
                    display_name AS "displayName",description,status,current_version_id AS "currentVersionId"
             FROM knowledge_portal_theme WHERE site_id=?
+            ORDER BY CASE theme_key WHEN 'heritage-red' THEN 0 ELSE 1 END, create_time
+            LIMIT 1
             """, siteId);
         if (rows.isEmpty()) throw new KmaException(404, "PORTAL_THEME_NOT_FOUND");
         return rows.getFirst();
@@ -448,7 +595,88 @@ public class PortalThemeService {
         defaults.forEach((path, source) -> insertFile(versionId, path, source));
         knowledgeJdbcTemplate.update(
             "UPDATE knowledge_portal_theme SET current_version_id=? WHERE theme_id=?", versionId, themeId);
-        return requireTheme(siteId);
+        return requireTheme(siteId, themeKey);
+    }
+
+    private void ensureBuiltInThemes(Map<String, Object> site) {
+        long siteId = ((Number) site.get("siteId")).longValue();
+        for (ThemePreset preset : builtInPresets()) {
+            Integer exists = knowledgeJdbcTemplate.queryForObject(
+                "SELECT count(*) FROM knowledge_portal_theme WHERE site_id=? AND theme_key=?",
+                Integer.class, siteId, preset.key());
+            if (exists != null && exists > 0) continue;
+            Long themeId = knowledgeJdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_portal_theme
+                    (site_id,theme_key,display_name,description,created_by,updated_by)
+                VALUES (?,?,?,?,?,?) RETURNING theme_id
+                """, Long.class, siteId, preset.key(), preset.name(), preset.description(), userId(), userId());
+            Map<String, String> files = preset.files();
+            Long versionId = knowledgeJdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_portal_theme_version
+                    (theme_id,version_no,status,manifest_json,compiled_json,checksum,scan_status,scan_result,
+                     file_count,expanded_size,created_by,published_by,scanned_at,published_at)
+                VALUES (?,1,'published',?::jsonb,'{"compiler":"kma-liquid-v1","preset":true}'::jsonb,
+                        ?,'passed','{"issues":[]}'::jsonb,?,?,?, ?,now(),now()) RETURNING theme_version_id
+                """, Long.class, themeId, json(preset.manifest()), preset.checksum(), files.size(),
+                files.values().stream().mapToLong(value -> value.getBytes(StandardCharsets.UTF_8).length).sum(),
+                userId(), userId());
+            files.forEach((path, source) -> insertFile(versionId, path, source));
+            knowledgeJdbcTemplate.update("UPDATE knowledge_portal_theme SET current_version_id=? WHERE theme_id=?",
+                versionId, themeId);
+        }
+    }
+
+    private List<ThemePreset> builtInPresets() {
+        return List.of(
+            bundledTheme("heritage-red"), bundledTheme("governance-blue"), bundledTheme("ink-night"));
+    }
+
+    private ThemeSourceStatus localSourceStatus(String themeKey) {
+        if (!List.of("heritage-red", "governance-blue", "ink-night").contains(themeKey))
+            return new ThemeSourceStatus(false, "not-bundled", null, "非内置主题没有本地源码包");
+        try {
+            ThemePreset preset = bundledTheme(themeKey);
+            List<String> issues = PortalThemeSecurity.validate(preset.files(), preset.manifest());
+            if (!issues.isEmpty()) return new ThemeSourceStatus(false, "invalid", preset.checksum(),
+                "本地源码未通过安全扫描");
+            return new ThemeSourceStatus(true, "available", preset.checksum(), null);
+        } catch (Exception ex) {
+            return new ThemeSourceStatus(false, "unavailable", null, "本地源码包不可读取");
+        }
+    }
+
+    private ThemePreset bundledTheme(String themeKey) {
+        String root = "portal-themes/" + themeKey + "/";
+        ClassPathResource descriptor = new ClassPathResource(root + "theme.json");
+        try (InputStream input = descriptor.getInputStream()) {
+            JsonNode source = objectMapper.readTree(input);
+            if (!themeKey.equals(source.path("themeKey").asText()))
+                throw new KmaException(500, "PORTAL_THEME_LOCAL_SOURCE_INVALID");
+            String name = source.path("displayName").asText();
+            String description = source.path("description").asText();
+            if (!StringUtils.hasText(name) || !source.path("files").isArray())
+                throw new KmaException(500, "PORTAL_THEME_LOCAL_SOURCE_INVALID");
+            ObjectNode manifest = objectMapper.createObjectNode();
+            manifest.put("kind", source.path("kind").asText("portal-theme"));
+            manifest.put("entry", source.path("entry").asText("layout.html"));
+            manifest.set("capabilities", source.path("capabilities").deepCopy());
+            Map<String, String> files = new LinkedHashMap<>();
+            for (JsonNode file : source.path("files")) {
+                String path = PortalThemeSecurity.normalizePath(file.asText());
+                if (!StringUtils.hasText(path) || files.containsKey(path))
+                    throw new KmaException(500, "PORTAL_THEME_LOCAL_SOURCE_INVALID");
+                ClassPathResource resource = new ClassPathResource(root + path);
+                try (InputStream fileInput = resource.getInputStream()) {
+                    files.put(path, new String(fileInput.readAllBytes(), StandardCharsets.UTF_8));
+                }
+            }
+            List<String> issues = PortalThemeSecurity.validate(files, manifest);
+            if (!issues.isEmpty()) throw new KmaException(500, "PORTAL_THEME_LOCAL_SOURCE_INVALID");
+            return new ThemePreset(themeKey, name, description, manifest, files, checksum(files));
+        } catch (IOException | RuntimeException ex) {
+            if (ex instanceof KmaException kma) throw kma;
+            throw new KmaException(500, "PORTAL_THEME_LOCAL_SOURCE_INVALID");
+        }
     }
 
     private ObjectNode convertToV4(ObjectNode source, Long themeId, Long themeVersionId) {
@@ -550,6 +778,10 @@ public class PortalThemeService {
         } catch (JsonProcessingException ex) {
             throw new KmaException(500, "PORTAL_THEME_JSON_CORRUPTED");
         }
+    }
+
+    private Long number(Object value) {
+        return value instanceof Number number ? number.longValue() : null;
     }
 
     private long userId() {

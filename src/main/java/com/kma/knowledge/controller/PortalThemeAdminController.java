@@ -38,8 +38,15 @@ public class PortalThemeAdminController {
 
     @GetMapping
     @PreAuthorize("@ss.hasPermi('portal-site:update') and @ss.hasPermi('portal-page:edit')")
-    public ApiResult<Map<String, Object>> workspace(@PathVariable String siteKey) {
-        return ApiResult.success(service.workspace(siteKey));
+    public ApiResult<Map<String, Object>> workspace(@PathVariable String siteKey,
+                                                     @RequestParam(required = false) String themeKey) {
+        return ApiResult.success(service.workspace(siteKey, themeKey));
+    }
+
+    @GetMapping("/themes")
+    @PreAuthorize("@ss.hasPermi('portal-site:update') and @ss.hasPermi('portal-page:edit')")
+    public ApiResult<java.util.List<Map<String, Object>>> themes(@PathVariable String siteKey) {
+        return ApiResult.success(service.themes(siteKey));
     }
 
     @PutMapping("/{themeVersionId}")
@@ -48,6 +55,20 @@ public class PortalThemeAdminController {
                                                @PathVariable Long themeVersionId,
                                                @Valid @RequestBody PortalThemeFilesRequest request) {
         return ApiResult.success(service.save(siteKey, themeVersionId, request));
+    }
+
+    @PostMapping("/{themeVersionId}/apply")
+    @PreAuthorize("@ss.hasPermi('portal-site:update') and @ss.hasPermi('portal-page:edit') and @ss.hasPermi('portal-code:edit')")
+    public ApiResult<Map<String, Object>> apply(@PathVariable String siteKey,
+                                                 @PathVariable Long themeVersionId) {
+        return ApiResult.success(service.applyTheme(siteKey, themeVersionId));
+    }
+
+    @PostMapping("/{themeKey}/local-source/sync")
+    @PreAuthorize("@ss.hasPermi('portal-site:update') and @ss.hasPermi('portal-page:edit') and @ss.hasPermi('portal-code:edit')")
+    public ApiResult<Map<String, Object>> syncLocalSource(@PathVariable String siteKey,
+                                                           @PathVariable String themeKey) {
+        return ApiResult.success(service.syncLocalSource(siteKey, themeKey));
     }
 
     @PostMapping("/{themeVersionId}/ai-proposals")

@@ -1,0 +1,24 @@
+<div class="kma-site">
+  <header class="masthead">
+    <a href="#" data-kma-nav="home" class="brand">
+      <span class="brand-mark" aria-hidden="true">党</span>
+      <span class="brand-text">
+        <strong>{{ site.name }}</strong>
+        <small>KNOWLEDGE ARCHIVE</small>
+      </span>
+    </a>
+    <nav class="site-nav" aria-label="主导航">
+      <a href="#" data-kma-nav="home">首页</a>
+      <a href="#" data-kma-nav="library">资料中心</a>
+      <a href="#" data-kma-nav="topics">专题目录</a>
+      <a href="#" data-kma-nav="ask">AI 问答</a>
+      <a href="#" data-kma-nav="favorites">我的收藏</a>
+      <a href="#" data-kma-nav="profile">个人中心</a>
+    </nav>
+  </header>
+  <main class="site-main"><kma-slot name="content" /></main>
+  <footer class="site-footer">
+    <p>{{ site.name }}</p>
+    <p>以学铸魂 · 以知促行</p>
+  </footer>
+</div>

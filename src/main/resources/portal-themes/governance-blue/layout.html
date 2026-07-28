@@ -1,0 +1,24 @@
+<div class="kma-site">
+  <header class="masthead">
+    <a href="#" data-kma-nav="home" class="brand">
+      <span class="brand-mark" aria-hidden="true">政</span>
+      <span class="brand-text">
+        <strong>{{ site.name }}</strong>
+        <small>KNOWLEDGE SERVICE</small>
+      </span>
+    </a>
+    <nav class="site-nav" aria-label="主导航">
+      <a href="#" data-kma-nav="home">首页</a>
+      <a href="#" data-kma-nav="library">资料库</a>
+      <a href="#" data-kma-nav="topics">专题</a>
+      <a href="#" data-kma-nav="ask">智能问答</a>
+      <a href="#" data-kma-nav="favorites">收藏</a>
+      <a href="#" data-kma-nav="profile">个人</a>
+    </nav>
+  </header>
+  <main class="site-main"><kma-slot name="content" /></main>
+  <footer class="site-footer">
+    <p>{{ site.name }}</p>
+    <p>可信知识 · 有据可查</p>
+  </footer>
+</div>

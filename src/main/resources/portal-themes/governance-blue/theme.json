@@ -1,0 +1,9 @@
+{
+  "themeKey": "governance-blue",
+  "displayName": "政务知蓝",
+  "description": "清晰、克制且信息密度更高的知识服务主题",
+  "kind": "portal-theme",
+  "entry": "layout.html",
+  "capabilities": ["page-context", "contents", "search", "ask", "analytics", "navigation"],
+  "files": ["layout.html", "pages/home.html", "pages/library.html", "pages/topics.html", "pages/ask.html", "pages/content.html", "pages/search.html", "pages/favorites.html", "pages/profile.html", "styles/theme.css", "scripts/theme.js"]
+}

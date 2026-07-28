@@ -242,8 +242,31 @@ export interface PortalThemeWorkspace {
   files: Record<string, string>
 }
 
-export function getPortalThemeWorkspace(siteKey: string) {
-  return authorizedJson<PortalThemeWorkspace>(adminPath(siteKey, '/theme-workspace'))
+export interface PortalThemeCatalogItem {
+  themeId: number
+  themeKey: string
+  displayName: string
+  description?: string
+  status: 'active' | 'disabled'
+  currentVersionId: number
+  versionNo: number
+  scanStatus: 'pending' | 'passed' | 'failed'
+  versionStatus: 'draft' | 'published' | 'archived'
+  published: boolean
+  recommended: boolean
+  localSourceAvailable: boolean
+  localSourceStatus: 'available' | 'invalid' | 'unavailable' | 'not-bundled'
+  localSourceChecksum?: string
+  localSourceMessage?: string
+}
+
+export function listPortalThemes(siteKey: string) {
+  return authorizedJson<PortalThemeCatalogItem[]>(adminPath(siteKey, '/theme-workspace/themes'))
+}
+
+export function getPortalThemeWorkspace(siteKey: string, themeKey?: string) {
+  const query = themeKey ? `?themeKey=${encodeURIComponent(themeKey)}` : ''
+  return authorizedJson<PortalThemeWorkspace>(adminPath(siteKey, `/theme-workspace${query}`))
 }
 
 export function savePortalThemeWorkspace(
@@ -260,6 +283,20 @@ export function savePortalThemeWorkspace(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
+}
+
+export function applyPortalTheme(siteKey: string, themeVersionId: number) {
+  return authorizedJson<PortalThemeWorkspace>(
+    adminPath(siteKey, `/theme-workspace/${themeVersionId}/apply`),
+    { method: 'POST' },
+  )
+}
+
+export function syncPortalThemeLocalSource(siteKey: string, themeKey: string) {
+  return authorizedJson<PortalThemeWorkspace>(
+    adminPath(siteKey, `/theme-workspace/${encodeURIComponent(themeKey)}/local-source/sync`),
+    { method: 'POST' },
+  )
 }
 
 export interface PortalDesignCapability {

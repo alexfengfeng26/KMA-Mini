@@ -5,13 +5,17 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import {
   getPortalPreviewBootstrap,
   getPortalThemeWorkspace,
+  applyPortalTheme,
   exportPortalTheme,
   importPortalTheme,
+  listPortalThemes,
   listPortalSites,
   portalVersionAction,
   proposePortalTheme,
   savePortalThemeWorkspace,
+  syncPortalThemeLocalSource,
   type PortalThemeDesignProposal,
+  type PortalThemeCatalogItem,
   type PortalThemeWorkspace,
 } from '../../api/portalSites'
 import type { PortalBootstrap, PortalThemeRuntime } from '../../cms/siteConfig'
@@ -20,6 +24,8 @@ import { buildThemeDocument } from '../../cms/v4/themeRuntime'
 const sites = ref<Array<{ siteKey: string; name: string }>>([])
 const siteKey = ref('default')
 const workspace = ref<PortalThemeWorkspace>()
+const themeCatalog = ref<PortalThemeCatalogItem[]>([])
+const selectedThemeKey = ref('heritage-red')
 const files = reactive<Record<string, string>>({})
 const activePath = ref('layout.html')
 const routePage = ref('home')
@@ -64,6 +70,9 @@ const fileTree = computed(() => {
 })
 const issues = computed(() => workspace.value?.version.scanResult?.issues || [])
 const portalStatus = computed(() => workspace.value?.portalVersion.status || 'draft')
+const selectedTheme = computed(() =>
+  themeCatalog.value.find((theme) => theme.themeKey === selectedThemeKey.value),
+)
 const previewSource = computed(() => {
   const bootstrap = previewBootstrap.value
   const current = workspace.value
@@ -146,10 +155,18 @@ function replaceFiles(nextFiles: Record<string, string>) {
   }
 }
 
+async function loadThemeCatalog() {
+  themeCatalog.value = await listPortalThemes(siteKey.value)
+  if (!themeCatalog.value.some((theme) => theme.themeKey === selectedThemeKey.value)) {
+    selectedThemeKey.value =
+      themeCatalog.value.find((theme) => theme.recommended)?.themeKey || themeCatalog.value[0]?.themeKey || ''
+  }
+}
+
 async function loadWorkspace() {
   loading.value = true
   try {
-    const result = await getPortalThemeWorkspace(siteKey.value)
+    const result = await getPortalThemeWorkspace(siteKey.value, selectedThemeKey.value || undefined)
     workspace.value = result
     replaceFiles(result.files)
     dirty.value = false
@@ -158,6 +175,73 @@ async function loadWorkspace() {
     ElMessage.error(error instanceof Error ? error.message : '主题工作区加载失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function switchTheme(themeKey: string) {
+  if (themeKey === selectedThemeKey.value) return
+  if (dirty.value) {
+    try {
+      await ElMessageBox.confirm('当前主题有未保存修改。保存后切换，或放弃这些修改。', '切换主题', {
+        confirmButtonText: '保存并切换',
+        cancelButtonText: '放弃修改',
+        distinguishCancelAndClose: true,
+        type: 'warning',
+      })
+      if (!(await save())) return
+    } catch (action) {
+      if (action !== 'cancel') return
+      dirty.value = false
+    }
+  }
+  selectedThemeKey.value = themeKey
+  await loadWorkspace()
+}
+
+async function applyTheme() {
+  const current = workspace.value
+  if (!current) return
+  if (dirty.value && !(await save())) return
+  try {
+    const result = await applyPortalTheme(siteKey.value, current.version.themeVersionId)
+    workspace.value = result
+    replaceFiles(result.files)
+    dirty.value = false
+    await loadThemeCatalog()
+    await loadPreview()
+    ElMessage.success('主题已应用到门户草稿；请继续真实预览并按流程送审发布')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '应用主题失败')
+  }
+}
+
+async function syncLocalSource() {
+  const theme = selectedTheme.value
+  if (!theme || !theme.localSourceAvailable) {
+    return ElMessage.warning(theme?.localSourceMessage || '当前主题没有可用的本地源码包')
+  }
+  if (dirty.value) {
+    try {
+      await ElMessageBox.confirm('先保存或放弃当前未保存修改后，才能从本地源码创建新草稿。', '同步本地源码', {
+        confirmButtonText: '保存后同步',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+      if (!(await save())) return
+    } catch {
+      return
+    }
+  }
+  try {
+    const result = await syncPortalThemeLocalSource(siteKey.value, theme.themeKey)
+    workspace.value = result
+    replaceFiles(result.files)
+    dirty.value = false
+    await loadThemeCatalog()
+    await loadPreview()
+    ElMessage.success('已从本地主题源码创建新的草稿版本，尚未应用或发布')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '本地源码同步失败')
   }
 }
 
@@ -327,11 +411,19 @@ async function importZip(event: Event) {
 }
 
 watch(routePage, () => void loadPreview())
-watch(siteKey, () => void loadWorkspace())
+watch(
+  siteKey,
+  () =>
+    void (async () => {
+      await loadThemeCatalog()
+      await loadWorkspace()
+    })(),
+)
 onMounted(async () => {
   sites.value = await listPortalSites()
   if (!sites.value.some((site) => site.siteKey === siteKey.value))
     siteKey.value = sites.value[0]?.siteKey || 'default'
+  await loadThemeCatalog()
   await loadWorkspace()
   await nextTick()
   await mountEditor()
@@ -382,6 +474,47 @@ onBeforeUnmount(() => editorInstance?.dispose())
         发布门户
       </el-button>
     </header>
+
+    <section class="theme-switcher" aria-label="主题快速选择">
+      <span class="theme-switcher__label">当前主题</span>
+      <el-select
+        :model-value="selectedThemeKey"
+        aria-label="当前主题"
+        class="theme-switcher__select"
+        @update:model-value="switchTheme"
+      >
+        <el-option
+          v-for="theme in themeCatalog"
+          :key="theme.themeId"
+          :label="theme.displayName"
+          :value="theme.themeKey"
+        >
+          <div class="theme-option">
+            <span class="theme-swatch" :class="`theme-swatch--${theme.themeKey}`" />
+            <span class="theme-option__copy"
+              ><strong>{{ theme.displayName }}</strong
+              ><small
+                >V{{ theme.versionNo }} · {{ theme.scanStatus === 'passed' ? '扫描通过' : '待处理' }}</small
+              ></span
+            >
+            <el-tag v-if="theme.published" size="small" type="success">当前发布</el-tag>
+            <el-tag v-else-if="theme.recommended" size="small" type="warning">推荐</el-tag>
+          </div>
+        </el-option>
+      </el-select>
+      <span class="theme-switcher__meta" :title="selectedTheme?.description">
+        {{ selectedTheme?.description || '选择一个主题进入文件工作区' }}
+      </span>
+      <el-tag v-if="selectedTheme?.localSourceAvailable" size="small" type="info">本地源码可同步</el-tag>
+      <el-tooltip :content="selectedTheme?.localSourceMessage || '从仓库资源目录创建新草稿，不覆盖已有版本'">
+        <el-button size="small" :disabled="!selectedTheme?.localSourceAvailable" @click="syncLocalSource">
+          从本地源码创建草稿
+        </el-button>
+      </el-tooltip>
+      <el-button size="small" type="primary" plain :disabled="!workspace" @click="applyTheme">
+        应用为门户主题
+      </el-button>
+    </section>
 
     <section class="studio-grid">
       <aside class="file-panel">
@@ -489,7 +622,7 @@ onBeforeUnmount(() => editorInstance?.dispose())
   z-index: 80;
   inset: 0;
   display: grid;
-  grid-template-rows: 58px minmax(0, 1fr) 44px;
+  grid-template-rows: auto auto minmax(0, 1fr) 44px;
   color: #d8e2ef;
   background: #0d1420;
 }
@@ -505,8 +638,98 @@ onBeforeUnmount(() => editorInstance?.dispose())
 }
 
 .studio-toolbar {
+  min-height: 58px;
+  flex-wrap: wrap;
   padding: 0 16px;
   border-bottom: 1px solid #283448;
+}
+
+.theme-switcher {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 46px;
+  padding: 6px 16px;
+  border-bottom: 1px solid #283448;
+  background: #101925;
+}
+
+.theme-switcher__label {
+  color: #c7d4e4;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.theme-switcher__select {
+  width: 224px;
+}
+
+.theme-switcher__meta {
+  min-width: 0;
+  overflow: hidden;
+  color: #8290a6;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-option {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.theme-option__copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.theme-option small {
+  color: #8290a6;
+}
+
+.theme-swatch {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border: 1px solid rgb(255 255 255 / 0.28);
+  border-radius: 7px;
+}
+
+.theme-swatch--heritage-red {
+  background: linear-gradient(135deg, #6e121a, #d67b44);
+}
+
+.theme-swatch--governance-blue {
+  background: linear-gradient(135deg, #123b66, #36a6c8);
+}
+
+.theme-swatch--ink-night {
+  background: linear-gradient(135deg, #111817, #e6bf72);
+}
+
+@media (width <= 980px) {
+  .theme-switcher {
+    flex-wrap: wrap;
+  }
+
+  .theme-switcher__meta {
+    flex: 1 1 260px;
+  }
+}
+
+@media (width <= 640px) {
+  .theme-switcher__select {
+    width: calc(100% - 76px);
+  }
+
+  .theme-switcher__meta {
+    order: 3;
+    flex-basis: 100%;
+  }
 }
 
 .studio-title {
@@ -686,7 +909,7 @@ onBeforeUnmount(() => editorInstance?.dispose())
   .preview-panel {
     position: absolute;
     z-index: 2;
-    inset: 58px 0 44px 55%;
+    inset: 132px 0 44px 55%;
   }
 }
 </style>
