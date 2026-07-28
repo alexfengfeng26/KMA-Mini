@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getPortalContent } from '../../api/party'
+import { authorizedFetch } from '../../api/client'
 import {
   portalBatchData,
   portalExtensionAsk,
@@ -11,6 +12,7 @@ import {
 import { useAuthStore } from '../../stores/auth'
 import type { PortalBootstrap } from '../siteConfig'
 import { buildThemeDocument } from './themeRuntime'
+import { createPortalSseParser } from './portalSse'
 
 const props = defineProps<{ bootstrap: PortalBootstrap }>()
 const router = useRouter()
@@ -65,6 +67,7 @@ async function handleRequest(event: MessageEvent<{ id?: string; type?: string; p
     'portal.navigation.back': 'navigation',
     'portal.search.query': 'search',
     'portal.ask.submit': 'ask',
+    'portal.ask.stream': 'ask',
     'portal.content.open': 'contents',
     'portal.analytics.track': 'analytics',
   }
@@ -120,6 +123,8 @@ async function handleRequest(event: MessageEvent<{ id?: string; type?: string; p
         true,
         await portalExtensionSearch(props.bootstrap.site.siteKey, String(payload || '').slice(0, 120)),
       )
+    } else if (type === 'portal.ask.stream') {
+      await streamAsk(id, payload)
     } else if (type === 'portal.ask.submit') {
       respond(
         id,
@@ -173,6 +178,41 @@ async function handleRequest(event: MessageEvent<{ id?: string; type?: string; p
     respond(id, false, {
       code: 'SDK_REQUEST_FAILED',
       message: error instanceof Error ? error.message.slice(0, 240) : '受控门户能力调用失败',
+    })
+  }
+}
+
+async function streamAsk(id: string, payload: unknown) {
+  const body = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
+  const query = String(body.query ?? payload ?? '').slice(0, 500)
+  const sessionIdRaw = Number(body.sessionId)
+  const sessionId = Number.isSafeInteger(sessionIdRaw) && sessionIdRaw > 0 ? sessionIdRaw : undefined
+  const parser = createPortalSseParser((event) => {
+    port?.postMessage({ id, ok: true, value: event, done: false })
+  })
+  try {
+    const response = await authorizedFetch(
+      `/api/v1/portal-sites/${encodeURIComponent(props.bootstrap.site.siteKey)}/ask/stream`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        body: JSON.stringify({ query, spaceCode: '*', topK: 5, portalOnly: true, sessionId }),
+      },
+    )
+    if (!response.ok || !response.body) throw new Error(`流式问答请求失败（${response.status}）`)
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    for (;;) {
+      const chunk = await reader.read()
+      if (chunk.done) break
+      parser.push(decoder.decode(chunk.value, { stream: true }))
+    }
+    parser.flush()
+    respond(id, true, { kind: 'done' })
+  } catch (error) {
+    respond(id, false, {
+      code: 'SDK_REQUEST_FAILED',
+      message: error instanceof Error ? error.message.slice(0, 240) : '流式问答失败',
     })
   }
 }

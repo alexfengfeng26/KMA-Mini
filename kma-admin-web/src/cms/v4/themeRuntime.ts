@@ -124,15 +124,17 @@ function widgets(source: string, bootstrap: PortalBootstrap): string {
 const sdkScript = String.raw`
 (() => {
   let port; let sequence = 0; let navigationPending = false; const pending = new Map();
-  const request = (type, payload) => new Promise((resolve, reject) => {
+  const request = (type, payload, onEvent) => new Promise((resolve, reject) => {
     if (!port) return reject(new Error('PORTAL_SDK_UNAVAILABLE'));
-    const id = 'theme-' + (++sequence); pending.set(id,{resolve,reject});
+    const id = 'theme-' + (++sequence); pending.set(id,{resolve,reject,onEvent});
     port.postMessage({id,type,payload});
   });
   addEventListener('message', event => {
     if(event.data?.type!=='kma-theme-init'||!event.ports[0]) return;
     port=event.ports[0]; port.onmessage=event=>{
-      const call=pending.get(event.data?.id); if(!call)return; pending.delete(event.data.id);
+      const call=pending.get(event.data?.id); if(!call)return;
+      if(event.data.done===false){ if(call.onEvent)call.onEvent(event.data.value); return; }
+      pending.delete(event.data.id);
       event.data.ok?call.resolve(event.data.value):call.reject(event.data.value);
     }; dispatchEvent(new Event('portal-sdk-ready'));
   });
@@ -147,9 +149,7 @@ const sdkScript = String.raw`
     search:{query:(value)=>request('portal.search.query',String(value||''))},
     ask:{
       submit:(value)=>request('portal.ask.submit',String(value||'')),
-      stream:(value,onChunk)=>request('portal.ask.submit',String(value||'')).then(result=>{
-        if(typeof onChunk==='function')onChunk(result);return result;
-      })
+      stream:(value,onEvent)=>request('portal.ask.stream',value,onEvent)
     },
     content:{open:(id)=>request('portal.content.open',String(id||''))},
     analytics:{track:(value)=>request('portal.analytics.track',value)}

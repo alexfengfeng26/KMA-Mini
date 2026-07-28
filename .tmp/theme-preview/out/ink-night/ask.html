@@ -611,6 +611,209 @@ body {
   .quiet-list li { align-items: flex-start; flex-direction: column; gap: 4px; }
   .site-footer { flex-direction: column; align-items: flex-start; gap: 4px; }
 }
+
+/* ---------- 流式问答 ---------- */
+
+.chat-shell { max-width: 860px; margin: 0 auto; }
+
+.chat-welcome { padding: clamp(36px, 6vw, 72px) 24px; text-align: center; }
+
+.chat-welcome h1 {
+  margin: 12px 0;
+  font-family: var(--font-serif);
+  font-size: clamp(29px, 4vw, 40px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.welcome-sub {
+  max-width: 46ch;
+  margin: 0 auto;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.suggest-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.suggest {
+  padding: 9px 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 160ms var(--ease), color 160ms var(--ease);
+}
+
+.suggest:hover { border-color: oklch(76% 0.11 85 / 0.55); color: var(--accent); }
+
+.chat-messages { display: grid; gap: 18px; padding: 8px 0 24px; }
+
+.msg.user { display: flex; justify-content: flex-end; }
+
+.msg.user .msg-body {
+  max-width: 78%;
+  padding: 12px 18px;
+  border: 1px solid oklch(76% 0.11 85 / 0.35);
+  border-radius: 16px 16px 4px 16px;
+  background: oklch(76% 0.11 85 / 0.14);
+  color: var(--ink);
+  font-size: 14.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.msg.assistant {
+  display: grid;
+  gap: 10px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: 4px 16px 16px 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.msg-status { margin: 0; color: var(--muted); font-size: 12px; }
+
+.msg-status.error { color: oklch(70% 0.13 40); }
+
+.msg.assistant .msg-body {
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: 15.5px;
+  line-height: 1.95;
+  white-space: pre-wrap;
+}
+
+.msg-body.streaming::after {
+  content: "▍";
+  color: var(--accent);
+  animation: caret-blink 1s steps(2) infinite;
+}
+
+.citations { display: grid; gap: 8px; }
+
+.citations:not(:empty) {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.citation-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms var(--ease), background-color 160ms var(--ease);
+}
+
+.citation-card:hover { border-color: oklch(76% 0.11 85 / 0.5); background: var(--surface-raised); }
+
+.citation-no {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.citation-main { display: grid; gap: 3px; min-width: 0; }
+
+.citation-main strong { color: var(--ink); font-size: 13.5px; }
+
+.citation-meta { color: var(--muted); font-size: 11px; }
+
+.citation-snippet { color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+.chat-dock {
+  position: sticky;
+  bottom: 16px;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lift);
+}
+
+.chat-dock textarea {
+  flex: 1;
+  min-width: 0;
+  max-height: 168px;
+  padding: 10px 12px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.6;
+  caret-color: var(--accent);
+  resize: none;
+}
+
+.chat-dock textarea::placeholder { color: var(--muted); }
+
+.chat-dock button {
+  flex: none;
+  min-height: 42px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease);
+}
+
+.chat-dock button:hover:not(:disabled) { background: oklch(80% 0.11 85); }
+
+.chat-dock button:disabled { opacity: 0.6; cursor: default; }
+
+.retry-button {
+  justify-self: start;
+  padding: 7px 18px;
+  border: 1px solid oklch(76% 0.11 85 / 0.55);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@keyframes caret-blink { 50% { opacity: 0; } }
+
+@media (max-width: 720px) {
+  .msg.user .msg-body { max-width: 92%; }
+  .chat-dock { bottom: 8px; }
+}
 </style></head><body><div class="kma-site">
   <header class="masthead">
     <a href="#" data-kma-nav="home" class="brand">
@@ -629,12 +832,24 @@ body {
       <a href="#" data-kma-nav="profile">我的</a>
     </nav>
   </header>
-  <main class="site-main"><header class="page-title">
-  <p class="kicker">Ask the Archive</p>
-  <h1>问答</h1>
-  <p class="page-sub">向收录的资料提问，回答附出处。</p>
-</header>
-<div class="kma-card kma-ai"><textarea id="kma-ai-query" placeholder="请输入问题"></textarea><button id="kma-ai-submit">基于资料回答</button><pre id="kma-ai-answer"></pre></div>
+  <main class="site-main"><section class="chat-shell">
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-welcome">
+      <p class="kicker">Ask the Archive</p>
+      <h1>问答</h1>
+      <p class="welcome-sub">向收录的资料提问，回答附出处。多轮追问会保留上下文，像夜读时与馆员交谈。</p>
+      <div class="suggest-row">
+        <button type="button" class="suggest">最近收录的资料讲了什么？</button>
+        <button type="button" class="suggest">帮我梳理数据共享的管理要点</button>
+        <button type="button" class="suggest">有哪些值得重读的治理案例？</button>
+      </div>
+    </div>
+  </div>
+  <div class="chat-dock">
+    <textarea id="chat-input" rows="1" placeholder="输入问题，Enter 发送，Shift+Enter 换行"></textarea>
+    <button id="chat-send" type="button">发送</button>
+  </div>
+</section>
 </main>
   <footer class="site-footer">
     <p>城区治理知识门户</p>
@@ -693,8 +908,11 @@ document.querySelectorAll('[data-auto-hide]').forEach((block) => {
   if (!block.querySelector('button, li')) block.hidden = true
 })
 
+let sdkReady = false
+
 // 依据当前页面高亮主导航（page-context 能力不可用时保持静态）
 window.addEventListener('portal-sdk-ready', () => {
+  sdkReady = true
   window.portal.context.get()
     .then((context) => {
       const slug = context && context.page && context.page.slug ? context.page.slug : 'home'
@@ -705,4 +923,197 @@ window.addEventListener('portal-sdk-ready', () => {
     })
     .catch(() => {})
 })
+
+// ---------- 流式问答（问答页） ----------
+
+const chatMessages = document.querySelector('#chat-messages')
+const chatInput = document.querySelector('#chat-input')
+const chatSend = document.querySelector('#chat-send')
+
+if (chatMessages && chatInput && chatSend) {
+  let sessionId
+  let streaming = false
+
+  const el = (tag, className, text) => {
+    const node = document.createElement(tag)
+    if (className) node.className = className
+    if (text !== undefined) node.textContent = text
+    return node
+  }
+
+  const scrollToEnd = () => {
+    const last = chatMessages.lastElementChild
+    if (last) last.scrollIntoView({ block: 'end' })
+  }
+
+  const autogrow = () => {
+    chatInput.style.height = 'auto'
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 168) + 'px'
+  }
+
+  const setStreaming = (flag) => {
+    streaming = flag
+    chatSend.disabled = flag
+    chatSend.textContent = flag ? '回答中…' : '发送'
+  }
+
+  const addUserMessage = (text) => {
+    const msg = el('div', 'msg user')
+    msg.append(el('div', 'msg-body', text))
+    chatMessages.append(msg)
+    scrollToEnd()
+  }
+
+  const addAssistantMessage = () => {
+    const msg = el('div', 'msg assistant')
+    const status = el('p', 'msg-status', '正在检索资料…')
+    const body = el('div', 'msg-body')
+    const citations = el('div', 'citations')
+    msg.append(status, body, citations)
+    chatMessages.append(msg)
+    scrollToEnd()
+    return { msg, status, body, citations }
+  }
+
+  const renderCitations = (container, items) => {
+    container.replaceChildren()
+    ;(Array.isArray(items) ? items : []).forEach((item, index) => {
+      if (!item || !(item.docTitle || item.title)) return
+      const card = el('button', 'citation-card')
+      card.type = 'button'
+      const docId = item.docId !== undefined ? item.docId : item.contentId
+      if (docId !== undefined && docId !== null) card.dataset.kmaContent = String(docId)
+      card.append(el('span', 'citation-no', String(index + 1)))
+      const main = el('span', 'citation-main')
+      main.append(el('strong', '', item.docTitle || item.title))
+      const meta = [item.issuingAuthority, item.sourceTag].filter(Boolean).join(' · ')
+      if (meta) main.append(el('span', 'citation-meta', meta))
+      if (item.content) main.append(el('span', 'citation-snippet', String(item.content).slice(0, 90)))
+      card.append(main)
+      container.append(card)
+    })
+  }
+
+  const whenReady = () => sdkReady
+    ? Promise.resolve()
+    : new Promise((resolve) => window.addEventListener('portal-sdk-ready', resolve, { once: true }))
+
+  const send = async (text) => {
+    const query = String(text || '').trim()
+    if (!query || streaming) return
+    await whenReady()
+    const welcome = chatMessages.querySelector('.chat-welcome')
+    if (welcome) welcome.remove()
+    addUserMessage(query)
+    chatInput.value = ''
+    autogrow()
+    setStreaming(true)
+    const view = addAssistantMessage()
+    let received = false
+
+    const finish = () => {
+      view.body.classList.remove('streaming')
+      setStreaming(false)
+      chatInput.focus()
+    }
+    const fail = (error) => {
+      view.status.hidden = false
+      view.status.textContent = (error && error.message) || '回答失败，请稍后重试'
+      view.status.classList.add('error')
+      const retry = el('button', 'retry-button', '重试')
+      retry.type = 'button'
+      retry.addEventListener('click', () => {
+        view.msg.remove()
+        send(query)
+      })
+      view.msg.append(retry)
+      finish()
+    }
+    const onEvent = (event) => {
+      if (!event || !event.kind) return
+      if (event.kind === 'citations') {
+        view.status.textContent = event.items.length ? '已找到 ' + event.items.length + ' 条出处' : '未检索到直接出处'
+        renderCitations(view.citations, event.items)
+        scrollToEnd()
+      } else if (event.kind === 'delta') {
+        if (!received) { received = true; view.status.hidden = true }
+        view.body.textContent += event.text
+        view.body.classList.add('streaming')
+        scrollToEnd()
+      } else if (event.kind === 'done') {
+        if (event.sessionId) sessionId = event.sessionId
+      } else if (event.kind === 'error') {
+        view.status.hidden = false
+        view.status.textContent = '回答失败：' + (event.message || '请稍后重试')
+        view.status.classList.add('error')
+      }
+    }
+    const payload = { query }
+    if (sessionId) payload.sessionId = sessionId
+
+    window.portal.ask.stream(payload, onEvent)
+      .then(finish)
+      .catch((error) => {
+        if (error && error.code === 'SDK_CAPABILITY_FORBIDDEN') {
+          // 宿主不支持流式时退回一次性问答（结果同样带引用）
+          view.status.textContent = '正在生成回答…'
+          window.portal.ask.submit(query)
+            .then((result) => {
+              renderCitations(view.citations, result && result.citations)
+              view.status.hidden = true
+              view.body.textContent = (result && result.answer) || '未获得回答'
+              if (result && result.sessionId) sessionId = result.sessionId
+              finish()
+            })
+            .catch(fail)
+        } else fail(error)
+      })
+  }
+
+  chatSend.addEventListener('click', () => send(chatInput.value))
+  chatInput.addEventListener('input', autogrow)
+  chatInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      send(chatInput.value)
+    }
+  })
+  document.querySelectorAll('.suggest').forEach((chip) => {
+    chip.addEventListener('click', () => send(chip.textContent))
+  })
+}
+</script><script>
+window.portal = Object.freeze({
+  context: { get: () => Promise.resolve({ page: { slug: 'ask' } }) },
+  data: { query: () => Promise.resolve({}) },
+  navigation: { go: () => Promise.resolve({}), replace: () => Promise.resolve({}), back: () => Promise.resolve({}) },
+  search: { query: () => Promise.resolve([]) },
+  content: { open: () => Promise.resolve({ opened: true }) },
+  analytics: { track: () => Promise.resolve({}) },
+  ask: {
+    submit: () => Promise.resolve({ answer: '（一次性回答）', citations: [], sessionId: 9001 }),
+    stream: (payload, onEvent) => new Promise((resolve) => {
+      const citations = [
+        { docId: 101, docTitle: '关于进一步优化政务服务提升行政效能的指导意见', sourceTag: '政策文件', issuingAuthority: '国务院办公厅', content: '以人民为中心，坚持问题导向、需求导向，推动政务服务从"能办"向"好办、易办"转变。' },
+        { docId: 102, docTitle: '数字政府建设数据共享管理办法', sourceTag: '制度规范', issuingAuthority: '数据发展司', content: '完善政务数据共享协调机制，推动高频电子证照跨地区、跨部门互认共享。' },
+        { docId: 106, docTitle: '政务服务窗口人员行为准则与考核办法', sourceTag: '制度规范', issuingAuthority: '政务服务局', content: '明确首问负责、一次性告知、限时办结等服务规范及配套考核指标。' },
+      ]
+      const answer = '根据收录资料，提升行政效能的重点包括三个方面：\n\n一、推进事项标准化。统一事项名称、编码、依据、类型等基本要素，实现同一事项无差别受理、同标准办理[1]。\n\n二、强化数据共享。推动高频电子证照跨地区、跨部门互认共享，减少证明材料重复提交[2]。\n\n三、健全服务规范。落实首问负责、一次性告知、限时办结等制度，并将服务效能纳入年度绩效考核[3]。'
+      let i = 0
+      setTimeout(() => {
+        onEvent({ kind: 'citations', items: citations })
+        const timer = setInterval(() => {
+          if (i >= answer.length) {
+            clearInterval(timer)
+            onEvent({ kind: 'done', sessionId: 9001 })
+            resolve({ kind: 'done' })
+            return
+          }
+          onEvent({ kind: 'delta', text: answer.slice(i, (i += 4)) })
+        }, 24)
+      }, 500)
+    }),
+  },
+})
+window.addEventListener('load', () => dispatchEvent(new Event('portal-sdk-ready')))
 </script></body></html>

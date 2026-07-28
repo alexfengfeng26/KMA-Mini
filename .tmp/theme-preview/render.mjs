@@ -70,6 +70,43 @@ const pages = [
   ['profile', '个人中心'],
 ]
 
+// 仅预览用：为问答页注入 mock SDK（假流式 + 假引用），不写入主题文件
+const askMockScript = `<script>
+window.portal = Object.freeze({
+  context: { get: () => Promise.resolve({ page: { slug: 'ask' } }) },
+  data: { query: () => Promise.resolve({}) },
+  navigation: { go: () => Promise.resolve({}), replace: () => Promise.resolve({}), back: () => Promise.resolve({}) },
+  search: { query: () => Promise.resolve([]) },
+  content: { open: () => Promise.resolve({ opened: true }) },
+  analytics: { track: () => Promise.resolve({}) },
+  ask: {
+    submit: () => Promise.resolve({ answer: '（一次性回答）', citations: [], sessionId: 9001 }),
+    stream: (payload, onEvent) => new Promise((resolve) => {
+      const citations = [
+        { docId: 101, docTitle: '关于进一步优化政务服务提升行政效能的指导意见', sourceTag: '政策文件', issuingAuthority: '国务院办公厅', content: '以人民为中心，坚持问题导向、需求导向，推动政务服务从"能办"向"好办、易办"转变。' },
+        { docId: 102, docTitle: '数字政府建设数据共享管理办法', sourceTag: '制度规范', issuingAuthority: '数据发展司', content: '完善政务数据共享协调机制，推动高频电子证照跨地区、跨部门互认共享。' },
+        { docId: 106, docTitle: '政务服务窗口人员行为准则与考核办法', sourceTag: '制度规范', issuingAuthority: '政务服务局', content: '明确首问负责、一次性告知、限时办结等服务规范及配套考核指标。' },
+      ]
+      const answer = '根据收录资料，提升行政效能的重点包括三个方面：\\n\\n一、推进事项标准化。统一事项名称、编码、依据、类型等基本要素，实现同一事项无差别受理、同标准办理[1]。\\n\\n二、强化数据共享。推动高频电子证照跨地区、跨部门互认共享，减少证明材料重复提交[2]。\\n\\n三、健全服务规范。落实首问负责、一次性告知、限时办结等制度，并将服务效能纳入年度绩效考核[3]。'
+      let i = 0
+      setTimeout(() => {
+        onEvent({ kind: 'citations', items: citations })
+        const timer = setInterval(() => {
+          if (i >= answer.length) {
+            clearInterval(timer)
+            onEvent({ kind: 'done', sessionId: 9001 })
+            resolve({ kind: 'done' })
+            return
+          }
+          onEvent({ kind: 'delta', text: answer.slice(i, (i += 4)) })
+        }, 24)
+      }, 500)
+    }),
+  },
+})
+window.addEventListener('load', () => dispatchEvent(new Event('portal-sdk-ready')))
+</scr` + `ipt>`
+
 const themeKeys = process.argv.slice(2)
 const targets = themeKeys.length ? themeKeys : ['governance-blue', 'heritage-red', 'ink-night']
 
@@ -110,7 +147,8 @@ for (const themeKey of targets) {
         currentContent,
       },
     }
-    const html = buildThemeDocument(runtime, bootstrap)
+    let html = buildThemeDocument(runtime, bootstrap)
+    if (slug === 'ask') html = html.replace('</body>', `${askMockScript}</body>`)
     writeFileSync(join(outRoot, themeKey, `${slug}.html`), html)
   }
   console.log(`rendered ${themeKey}`)

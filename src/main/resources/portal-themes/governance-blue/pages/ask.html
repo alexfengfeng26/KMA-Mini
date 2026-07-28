@@ -1,6 +1,18 @@
-<header class="page-title">
-  <p class="kicker">Retrieval Augmented Answers</p>
-  <h1>AI 知识问答</h1>
-  <p class="page-sub">基于门户收录资料生成回答，结论可回溯到原文出处。</p>
-</header>
-<kma-widget name="ai-chat" />
+<section class="chat-shell">
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-welcome">
+      <p class="kicker">Retrieval Augmented Answers</p>
+      <h1>AI 知识问答</h1>
+      <p class="welcome-sub">基于门户收录资料生成回答，结论可回溯到原文出处。多轮追问会保留上下文。</p>
+      <div class="suggest-row">
+        <button type="button" class="suggest">提升政务服务效能有哪些重点任务？</button>
+        <button type="button" class="suggest">数据共享需要遵循哪些规范？</button>
+        <button type="button" class="suggest">应急预案编制包含哪些流程？</button>
+      </div>
+    </div>
+  </div>
+  <div class="chat-dock">
+    <textarea id="chat-input" rows="1" placeholder="输入问题，Enter 发送，Shift+Enter 换行"></textarea>
+    <button id="chat-send" type="button">发送</button>
+  </div>
+</section>
