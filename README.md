@@ -296,4 +296,12 @@ mini 版不再包含 `scripts/verify.ps1` 与完整生产门禁脚本。
 
 ## 文档索引
 
-mini 版为精简仓库，原 `docs/` 目录已移除。运行时关键环境变量参见 [.env.example](.env.example)。
+mini 版为精简仓库，未保留原完整生产版文档集。运行时关键环境变量参见 [.env.example](.env.example)。
+
+### 使用说明手册
+
+- [Markdown 使用说明手册](docs/KMA-Mini-使用说明手册.md)：适合仓库内维护和在线阅读。
+- [Word 使用说明手册](docs/KMA-Mini-使用说明手册.docx)：适合打印、分发和离线阅读。
+- [核心流程图 Mermaid 源文件](docs/diagrams/)：包含内容生命周期、AI 知识链路、权限访问和门户发布流程。
+
+手册基于本机 `kma_mini` 演示环境编写，适用于学习、演示和内部验证，不代表生产就绪承诺。

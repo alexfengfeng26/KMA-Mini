@@ -76,6 +76,12 @@ describe('router authorization guard', () => {
     expect(portalSite.load).toHaveBeenCalledWith('policy', 'home')
   })
 
+  it('loads a protected preview version without sharing the published bootstrap cache', async () => {
+    sessionStorage.setItem('kma_access_token', 'token')
+    await router.push('/p/policy/home?previewVersion=42')
+    expect(portalSite.load).toHaveBeenCalledWith('policy', 'home', 42)
+  })
+
   it('isolates a site bootstrap failure on the unavailable page', async () => {
     sessionStorage.setItem('kma_access_token', 'token')
     portalSite.load.mockRejectedValue(new Error('site disabled'))

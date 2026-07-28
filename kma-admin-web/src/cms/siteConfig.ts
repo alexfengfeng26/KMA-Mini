@@ -329,6 +329,9 @@ export interface PortalBootstrap {
   packages?: PackageReference[]
   extensions: ResolvedPortalExtension[]
   portalData: import('../api/party').PortalHome
+  preview?: boolean
+  previewVersion?: number
+  previewVersionId?: number
 }
 
 export function isPortalSiteConfigV2(value: unknown): value is PortalSiteConfigV2 {

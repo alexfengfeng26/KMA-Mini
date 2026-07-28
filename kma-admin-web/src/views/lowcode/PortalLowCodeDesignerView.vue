@@ -56,7 +56,7 @@ import PortalCodeEditorDrawer from './PortalCodeEditorDrawer.vue'
 type LeftMode = 'structure' | 'components' | 'symbols'
 type InspectorMode = 'layout' | 'content' | 'style' | 'data' | 'interaction' | 'advanced'
 type ZoomMode = 'fit' | 'manual'
-type MoreCommand = 'undo' | 'redo' | 'code' | 'validate'
+type MoreCommand = 'undo' | 'redo' | 'code' | 'validate' | 'reject'
 
 interface WorkspacePreferences {
   version: 2
@@ -203,14 +203,14 @@ function checkpoint() {
 }
 
 function openLivePage() {
-  if (!livePagePath.value) return
+  if (!livePagePath.value || !activeVersion.value) return
   const previewWindow = window.open('about:blank', '_blank')
   if (!previewWindow) {
     ElMessage.warning('浏览器阻止了预览窗口，请允许本站打开新窗口后重试')
     return
   }
   previewWindow.opener = null
-  previewWindow.location.replace(livePagePath.value)
+  previewWindow.location.replace(`${livePagePath.value}?previewVersion=${activeVersion.value.versionId}`)
 }
 
 function defaultPreferences(): WorkspacePreferences {
@@ -331,6 +331,7 @@ function handleMoreCommand(command: MoreCommand) {
   if (command === 'undo') undo()
   else if (command === 'redo') redo()
   else if (command === 'code') codeDrawerOpen.value = true
+  else if (command === 'reject') void reject()
   else validateDraft()
 }
 
@@ -763,24 +764,31 @@ function applyAiProposal(proposal: PortalDesignProposal) {
 
 async function save() {
   if (!config.value || !activeVersion.value || !canEdit.value) return
-  if (activeVersion.value.status !== 'draft') {
-    activeVersion.value = await createPortalDraft(selectedSiteKey.value, config.value, '低代码设计器新草稿')
-  } else {
-    saving.value = true
-    try {
+  saving.value = true
+  try {
+    if (activeVersion.value.status !== 'draft') {
+      activeVersion.value = await createPortalDraft(selectedSiteKey.value, config.value, '低代码设计器新草稿')
+    } else {
       activeVersion.value = await updatePortalDraft(
         selectedSiteKey.value,
         activeVersion.value,
         config.value,
         '低代码布局编辑',
       )
-    } finally {
-      saving.value = false
     }
+    dirty.value = false
+    localStorage.removeItem(snapshotKey.value)
+    ElMessage.success('草稿已保存，可预览或继续编辑')
+  } finally {
+    saving.value = false
   }
-  dirty.value = false
-  localStorage.removeItem(snapshotKey.value)
-  ElMessage.success('V3 草稿已保存')
+}
+
+async function previewChanges() {
+  if (!config.value || !activeVersion.value || !canEdit.value) return
+  if (activeVersion.value.status === 'draft' && dirty.value) await save()
+  else if (activeVersion.value.status === 'published') await save()
+  openLivePage()
 }
 
 async function validateDraft() {
@@ -805,7 +813,7 @@ async function submit() {
     activeVersion.value.versionId,
     '低代码页面提交审核',
   )
-  ElMessage.success('已提交审核')
+  ElMessage.success('已保存、校验并送审')
   await loadSite(selectedSiteKey.value)
 }
 
@@ -1009,17 +1017,42 @@ onBeforeUnmount(() => {
                 代码组件
               </el-dropdown-item>
               <el-dropdown-item command="validate" :disabled="!canEdit">校验</el-dropdown-item>
+              <el-dropdown-item
+                v-if="activeVersion?.status === 'reviewing'"
+                command="reject"
+                :disabled="!canReview"
+                divided
+              >
+                驳回
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button :loading="saving" :disabled="!canEdit" type="primary" @click="save"> 保存草稿 </el-button>
         <el-button
-          v-if="activeVersion?.status === 'draft'"
+          v-if="activeVersion?.status === 'draft' || activeVersion?.status === 'published'"
+          :loading="saving"
           :disabled="!canEdit"
-          type="warning"
+          @click="save"
+        >
+          保存草稿
+        </el-button>
+        <el-button
+          v-if="activeVersion?.status === 'draft' || activeVersion?.status === 'published'"
+          :disabled="!canEdit"
+          @click="previewChanges"
+        >
+          预览变更
+        </el-button>
+        <el-button v-if="activeVersion?.status === 'reviewing'" :disabled="!canEdit" @click="previewChanges">
+          预览变更
+        </el-button>
+        <el-button
+          v-if="activeVersion?.status === 'draft' || activeVersion?.status === 'published'"
+          :disabled="!canEdit"
+          type="primary"
           @click="submit"
         >
-          提交审核
+          保存并送审
         </el-button>
         <el-button
           v-if="activeVersion?.status === 'reviewing' && !activeVersion.reviewedAt"
@@ -1030,21 +1063,12 @@ onBeforeUnmount(() => {
           审核通过
         </el-button>
         <el-button
-          v-if="activeVersion?.status === 'reviewing'"
-          :disabled="!canReview"
-          type="danger"
-          plain
-          @click="reject"
-        >
-          驳回
-        </el-button>
-        <el-button
           v-if="activeVersion?.status === 'reviewing' && activeVersion.reviewedAt"
           :disabled="!canPublish"
           type="success"
           @click="publish"
         >
-          发布
+          发布门户
         </el-button>
       </div>
     </header>

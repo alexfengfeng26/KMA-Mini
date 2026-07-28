@@ -172,7 +172,12 @@ router.beforeEach(async (to) => {
   // 首次登录强制改密时，默认门户站点可能尚未发布，直接渲染改密页，避免 bootstrap 失败导致无限重定向。
   if (requestedSite && !(mustChangePassword && to.path === profilePath)) {
     try {
-      await portalSite.load(requestedSite, portalPageSlug(to))
+      const requestedPreview = Number(to.query.previewVersion)
+      const previewVersion =
+        Number.isSafeInteger(requestedPreview) && requestedPreview > 0 ? requestedPreview : undefined
+      await (previewVersion
+        ? portalSite.load(requestedSite, portalPageSlug(to), previewVersion)
+        : portalSite.load(requestedSite, portalPageSlug(to)))
     } catch {
       return {
         path: '/unavailable',
@@ -205,7 +210,14 @@ window.addEventListener('kma-auth-refreshed', () => {
   const experience = useExperienceStore()
   const portalSite = usePortalSiteStore()
   const currentSite = routeSiteKey(router.currentRoute.value.params.siteKey)
-  if (currentSite) void portalSite.load(currentSite, portalPageSlug(router.currentRoute.value))
+  if (currentSite) {
+    const requestedPreview = Number(router.currentRoute.value.query.previewVersion)
+    const previewVersion =
+      Number.isSafeInteger(requestedPreview) && requestedPreview > 0 ? requestedPreview : undefined
+    void (previewVersion
+      ? portalSite.load(currentSite, portalPageSlug(router.currentRoute.value), previewVersion)
+      : portalSite.load(currentSite, portalPageSlug(router.currentRoute.value)))
+  }
   const permissions = router.currentRoute.value.meta.permissions as string[] | undefined
   if (!auth.hasAnyPermission(permissions))
     void router.replace(

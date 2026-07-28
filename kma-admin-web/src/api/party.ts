@@ -1,6 +1,6 @@
 import type { components, operations, paths } from './generated/schema'
 import { api, asList, asRecord, authorizedJson, unwrap } from './client'
-import { getActivePortalSiteKey } from '../app/portalSiteContext'
+import { getActivePortalPreviewVersion, getActivePortalSiteKey } from '../app/portalSiteContext'
 
 export type PartyContent = components['schemas']['PartyContentView']
 export type PartyContentRequest = components['schemas']['PartyContentRequest']
@@ -146,8 +146,13 @@ export function normalizePortalHome(raw: unknown): PortalHome {
 
 export async function getPortalHome(): Promise<PortalHome> {
   const siteKey = getActivePortalSiteKey()
+  const previewVersion = getActivePortalPreviewVersion()
   const bootstrap = asRecord(
-    await authorizedJson(`/api/v1/portal-sites/${encodeURIComponent(siteKey)}/bootstrap?page=home`),
+    await authorizedJson(
+      previewVersion
+        ? `/api/v1/admin/portal-sites/${encodeURIComponent(siteKey)}/versions/${previewVersion}/preview/bootstrap?page=home`
+        : `/api/v1/portal-sites/${encodeURIComponent(siteKey)}/bootstrap?page=home`,
+    ),
   )
   return normalizePortalHome(bootstrap.portalData)
 }
@@ -159,8 +164,12 @@ export async function getPortalContents(query: PortalContentQuery, signal?: Abor
   Object.entries(query).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') params.set(key, String(value))
   })
+  const siteKey = encodeURIComponent(getActivePortalSiteKey())
+  const previewVersion = getActivePortalPreviewVersion()
   const value = await authorizedJson(
-    `/api/v1/portal-sites/${encodeURIComponent(getActivePortalSiteKey())}/contents?${params}`,
+    previewVersion
+      ? `/api/v1/admin/portal-sites/${siteKey}/versions/${previewVersion}/preview/contents?${params}`
+      : `/api/v1/portal-sites/${siteKey}/contents?${params}`,
     { signal },
   )
   return pageResult(value, toContent, fallbackPage, fallbackPageSize)
@@ -168,8 +177,12 @@ export async function getPortalContents(query: PortalContentQuery, signal?: Abor
 
 export function getPortalContent(contentId: number, location?: string, signal?: AbortSignal) {
   const query = location ? `?location=${encodeURIComponent(location)}` : ''
+  const siteKey = encodeURIComponent(getActivePortalSiteKey())
+  const previewVersion = getActivePortalPreviewVersion()
   return authorizedJson<PartyContent>(
-    `/api/v1/portal-sites/${encodeURIComponent(getActivePortalSiteKey())}/contents/${contentId}${query}`,
+    previewVersion
+      ? `/api/v1/admin/portal-sites/${siteKey}/versions/${previewVersion}/preview/contents/${contentId}${query}`
+      : `/api/v1/portal-sites/${siteKey}/contents/${contentId}${query}`,
     { signal },
   )
 }

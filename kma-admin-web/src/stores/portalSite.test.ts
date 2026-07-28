@@ -3,9 +3,11 @@ import { createPinia, setActivePinia } from 'pinia'
 
 const api = vi.hoisted(() => ({
   getPortalBootstrap: vi.fn(),
+  getPortalPreviewBootstrap: vi.fn(),
 }))
 const context = vi.hoisted(() => ({
   setActivePortalSiteKey: vi.fn(),
+  setActivePortalPreviewVersion: vi.fn(),
 }))
 
 vi.mock('../api/portalSites', () => api)
@@ -56,7 +58,11 @@ describe('portal site store', () => {
     delete document.documentElement.dataset.kmaSite
     document.querySelector('style[data-kma-site-theme]')?.remove()
     api.getPortalBootstrap.mockReset().mockResolvedValue(structuredClone(bootstrap))
+    api.getPortalPreviewBootstrap
+      .mockReset()
+      .mockResolvedValue({ ...structuredClone(bootstrap), preview: true })
     context.setActivePortalSiteKey.mockReset()
+    context.setActivePortalPreviewVersion.mockReset()
     setActivePinia(createPinia())
   })
 
@@ -114,5 +120,15 @@ describe('portal site store', () => {
     expect(store.error).toBe('')
     expect(store.bootstrap?.page.slug).toBe('home')
     expect(api.getPortalBootstrap).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a preview bootstrap separate from the published cache', async () => {
+    const store = usePortalSiteStore()
+    await store.load('policy', 'home')
+    await store.load('policy', 'home', 42)
+
+    expect(api.getPortalPreviewBootstrap).toHaveBeenCalledWith('policy', 42, 'home')
+    expect(store.previewVersionId).toBe(42)
+    expect(context.setActivePortalPreviewVersion).toHaveBeenLastCalledWith(42)
   })
 })

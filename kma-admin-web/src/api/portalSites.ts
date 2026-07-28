@@ -16,10 +16,8 @@ function adminPath(siteKey = '', suffix = '') {
   return `/api/v1/admin/portal-sites${siteKey ? `/${encodeURIComponent(siteKey)}` : ''}${suffix}`
 }
 
-export async function getPortalBootstrap(siteKey: string, page = 'home'): Promise<PortalBootstrap> {
-  const value = asRecord(
-    await authorizedJson(sitePath(siteKey, `/bootstrap?page=${encodeURIComponent(page)}`)),
-  )
+function toPortalBootstrap(raw: unknown): PortalBootstrap {
+  const value = asRecord(raw)
   return {
     schemaVersion: Number(value.schemaVersion || 2) === 3 ? 3 : 2,
     site: asRecord(value.site) as unknown as PortalSiteSummary,
@@ -35,7 +33,25 @@ export async function getPortalBootstrap(siteKey: string, page = 'home'): Promis
     packages: asList(value.packages) as unknown as PortalBootstrap['packages'],
     extensions: asList(value.extensions) as unknown as PortalBootstrap['extensions'],
     portalData: normalizePortalHome(value.portalData),
+    preview: value.preview === true,
+    previewVersion: Number(value.previewVersion || 0) || undefined,
+    previewVersionId: Number(value.previewVersionId || 0) || undefined,
   }
+}
+
+export async function getPortalBootstrap(siteKey: string, page = 'home'): Promise<PortalBootstrap> {
+  const value = asRecord(
+    await authorizedJson(sitePath(siteKey, `/bootstrap?page=${encodeURIComponent(page)}`)),
+  )
+  return toPortalBootstrap(value)
+}
+
+export async function getPortalPreviewBootstrap(siteKey: string, versionId: number, page = 'home') {
+  return toPortalBootstrap(
+    await authorizedJson(
+      adminPath(siteKey, `/versions/${versionId}/preview/bootstrap?page=${encodeURIComponent(page)}`),
+    ),
+  )
 }
 
 export interface PortalExtensionCatalogItem {

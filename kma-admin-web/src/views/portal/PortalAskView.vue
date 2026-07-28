@@ -10,7 +10,7 @@ import CitationCard from '../../components/CitationCard.vue'
 import PageState from '../../components/PageState.vue'
 import { PARTY_CONTENT_CATEGORIES } from '../../domain/partyKnowledge'
 import { useSiteNavigation } from '../../composables/useSiteNavigation'
-import { getActivePortalSiteKey } from '../../app/portalSiteContext'
+import { getActivePortalPreviewVersion, getActivePortalSiteKey } from '../../app/portalSiteContext'
 
 interface Citation {
   chunkId: number
@@ -84,11 +84,15 @@ async function ask() {
   answer.value = { answer: '', citations: [], answered: true }
   controller.value = new AbortController()
   try {
+    const siteKey = encodeURIComponent(getActivePortalSiteKey())
+    const previewVersion = getActivePortalPreviewVersion()
     await streamQa(
       { ...form, portalOnly: true, stream: true },
       onEvent,
       controller.value.signal,
-      `/api/v1/portal-sites/${encodeURIComponent(getActivePortalSiteKey())}/ask/stream`,
+      previewVersion
+        ? `/api/v1/admin/portal-sites/${siteKey}/versions/${previewVersion}/preview/ask/stream`
+        : `/api/v1/portal-sites/${siteKey}/ask/stream`,
     )
     flushText()
   } catch (cause: unknown) {

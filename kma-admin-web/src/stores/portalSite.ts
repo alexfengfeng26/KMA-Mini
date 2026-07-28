@@ -1,8 +1,8 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { getPortalBootstrap } from '../api/portalSites'
+import { getPortalBootstrap, getPortalPreviewBootstrap } from '../api/portalSites'
 import type { PortalBootstrap } from '../cms/siteConfig'
-import { setActivePortalSiteKey } from '../app/portalSiteContext'
+import { setActivePortalPreviewVersion, setActivePortalSiteKey } from '../app/portalSiteContext'
 
 const allowedToken = /^[a-z][a-z0-9-]{1,60}$/i
 const tokenVariables: Record<string, string> = {
@@ -28,6 +28,7 @@ export const usePortalSiteStore = defineStore('portal-site', () => {
   const siteKey = ref('default')
   const loading = ref(false)
   const error = ref('')
+  const previewVersionId = ref<number | undefined>()
   const site = computed(() => bootstrap.value?.site)
 
   function applyTheme(value: PortalBootstrap) {
@@ -58,16 +59,25 @@ export const usePortalSiteStore = defineStore('portal-site', () => {
     style.textContent = value.theme.scopedCss || ''
   }
 
-  async function load(nextSiteKey: string, page = 'home') {
+  async function load(nextSiteKey: string, page = 'home', nextPreviewVersionId?: number) {
     error.value = ''
-    if (bootstrap.value && siteKey.value === nextSiteKey && bootstrap.value.page.slug === page)
+    if (
+      bootstrap.value &&
+      siteKey.value === nextSiteKey &&
+      bootstrap.value.page.slug === page &&
+      previewVersionId.value === nextPreviewVersionId
+    )
       return bootstrap.value
     loading.value = true
     try {
-      const result = await getPortalBootstrap(nextSiteKey, page)
+      const result = nextPreviewVersionId
+        ? await getPortalPreviewBootstrap(nextSiteKey, nextPreviewVersionId, page)
+        : await getPortalBootstrap(nextSiteKey, page)
       siteKey.value = nextSiteKey
+      previewVersionId.value = nextPreviewVersionId
       bootstrap.value = result
       setActivePortalSiteKey(nextSiteKey)
+      setActivePortalPreviewVersion(nextPreviewVersionId)
       applyTheme(result)
       return result
     } catch (reason) {
@@ -81,8 +91,10 @@ export const usePortalSiteStore = defineStore('portal-site', () => {
   function reset() {
     bootstrap.value = null
     siteKey.value = 'default'
+    previewVersionId.value = undefined
     error.value = ''
     setActivePortalSiteKey('default')
+    setActivePortalPreviewVersion(undefined)
     delete document.documentElement.dataset.kmaSite
     delete document.documentElement.dataset.kmaPack
     delete document.documentElement.dataset.kmaShell
@@ -96,5 +108,5 @@ export const usePortalSiteStore = defineStore('portal-site', () => {
     return bootstrap.value?.modules[moduleId] ?? defaultEnabled
   }
 
-  return { bootstrap, siteKey, site, loading, error, load, reset, isModuleEnabled }
+  return { bootstrap, siteKey, site, loading, error, previewVersionId, load, reset, isModuleEnabled }
 })

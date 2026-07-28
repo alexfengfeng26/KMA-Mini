@@ -275,31 +275,65 @@ public class PortalSiteService {
 
     public Map<String, Object> bootstrap(String siteKey, String pageSlug) {
         Published published = published(siteKey);
-        JsonNode page = published.config().path("pages").path(
-            StringUtils.hasText(pageSlug) ? pageSlug : "home");
+        return bootstrap(published.site(), published.versionNo(), published.config(), published.scope(), pageSlug, false, null);
+    }
+
+    /**
+     * Loads an immutable saved version without changing a published pointer.  This is intentionally
+     * separate from public portal bootstrap: a draft can only be rendered through the protected
+     * admin preview endpoint.
+     */
+    public Map<String, Object> previewBootstrap(String siteKey, Long versionId, String pageSlug) {
+        Site site = requireSite(siteKey, false);
+        Map<String, Object> version = version(site.siteId(), versionId, false);
+        JsonNode config = preparePublishedConfig(config(site.siteId(), versionId, false), siteKey);
+        int versionNo = ((Number) version.getOrDefault("versionNo", 0)).intValue();
+        return bootstrap(site, versionNo, config, scopeFromConfig(config), pageSlug, true, versionId);
+    }
+
+    public Map<String, Object> previewContents(String siteKey, Long versionId, PortalContentQuery query) {
+        return partyKnowledgeService.portalPage(query, previewScope(siteKey, versionId));
+    }
+
+    public PartyContentView previewContent(String siteKey, Long versionId, Long contentId, String location) {
+        return partyKnowledgeService.getPortalContent(contentId, location, previewScope(siteKey, versionId));
+    }
+
+    public void securePreviewQa(String siteKey, Long versionId, QARequest request) {
+        secureQa(request, previewScope(siteKey, versionId));
+    }
+
+    private Map<String, Object> bootstrap(Site site, int versionNo, JsonNode config, PortalContentScope scope,
+                                           String pageSlug, boolean preview, Long previewVersionId) {
+        JsonNode page = config.path("pages").path(StringUtils.hasText(pageSlug) ? pageSlug : "home");
         if (page.isMissingNode()) throw new KmaException(404, "PORTAL_PAGE_NOT_FOUND");
         Map<String, Object> result = new LinkedHashMap<>();
-        Map<String, Object> siteView = new LinkedHashMap<>(published.site().view());
-        JsonNode configuredSite = published.config().path("site");
-        siteView.put("name", configuredSite.path("name").asText(published.site().name()));
-        siteView.put("scenario", configuredSite.path("scenario").asText(published.site().scenario()));
+        Map<String, Object> siteView = new LinkedHashMap<>(site.view());
+        JsonNode configuredSite = config.path("site");
+        siteView.put("name", configuredSite.path("name").asText(site.name()));
+        siteView.put("scenario", configuredSite.path("scenario").asText(site.scenario()));
         siteView.put("locale", configuredSite.path("locale").asText("zh-CN"));
         result.put("site", siteView);
-        result.put("publishedVersion", published.versionNo());
-        result.put("schemaVersion", schemaVersion(published.config()));
-        result.put("revision", published.config().path("revision").asText("published-" + published.versionNo()));
-        result.put("shell", published.config().path("shell"));
-        result.put("theme", published.config().path("theme"));
-        result.put("modules", published.config().path("modules"));
-        result.put("search", published.config().path("search"));
-        result.put("assistant", published.config().path("assistant"));
+        result.put("publishedVersion", versionNo);
+        result.put("schemaVersion", schemaVersion(config));
+        result.put("revision", config.path("revision").asText((preview ? "preview-" : "published-") + versionNo));
+        result.put("shell", config.path("shell"));
+        result.put("theme", config.path("theme"));
+        result.put("modules", config.path("modules"));
+        result.put("search", config.path("search"));
+        result.put("assistant", config.path("assistant"));
         result.put("page", page);
-        result.put("symbols", published.config().path("symbols"));
-        result.put("packages", published.config().path("packages"));
+        result.put("symbols", config.path("symbols"));
+        result.put("packages", config.path("packages"));
         List<Map<String, Object>> resolvedExtensions = new ArrayList<>(extensionService.resolveBindings(page));
         resolvedExtensions.addAll(codePackageService.resolveBindings(page));
         result.put("extensions", resolvedExtensions);
-        result.put("portalData", partyKnowledgeService.home(published.scope()));
+        result.put("portalData", partyKnowledgeService.home(scope));
+        if (preview) {
+            result.put("preview", true);
+            result.put("previewVersionId", previewVersionId);
+            result.put("previewVersion", versionNo);
+        }
         return result;
     }
 
@@ -366,7 +400,10 @@ public class PortalSiteService {
     }
 
     public void secureQa(String siteKey, QARequest request) {
-        PortalContentScope scope = published(siteKey).scope();
+        secureQa(request, published(siteKey).scope());
+    }
+
+    private void secureQa(QARequest request, PortalContentScope scope) {
         if (!scope.allSpaces() && !scope.spaceCodes().contains(request.getSpaceCode()))
             throw new KmaException(403, "PORTAL_SPACE_OUT_OF_SCOPE");
         request.setPortalOnly(true);
@@ -376,6 +413,26 @@ public class PortalSiteService {
             ? Set.of("effective", "pending") : scope.validityStatuses();
         request.setValidityStatuses(intersection(request.getValidityStatuses(), allowedValidity,
             "PORTAL_VALIDITY_OUT_OF_SCOPE"));
+    }
+
+    private PortalContentScope previewScope(String siteKey, Long versionId) {
+        Site site = requireSite(siteKey, false);
+        return scopeFromConfig(config(site.siteId(), versionId, false));
+    }
+
+    private PortalContentScope scopeFromConfig(JsonNode config) {
+        JsonNode scope = config.path("contentScope");
+        return new PortalContentScope(scope.path("allSpaces").asBoolean(false), textValues(scope.path("spaceCodes")),
+            textValues(scope.path("topicCodes")), textValues(scope.path("contentTypes")),
+            textValues(scope.path("validityStatuses")));
+    }
+
+    private Set<String> textValues(JsonNode values) {
+        Set<String> result = new LinkedHashSet<>();
+        if (values.isArray()) values.forEach(value -> {
+            if (StringUtils.hasText(value.asText())) result.add(value.asText());
+        });
+        return result;
     }
 
     private Published published(String siteKey) {

@@ -1,0 +1,8 @@
+flowchart TD
+  L[本地账号登录] --> RBAC[RBAC 角色与权限]
+  RBAC --> ORG[组织归属]
+  ORG --> ACL[知识空间 ACL]
+  RBAC --> F[后台功能授权]
+  ACL --> D[内容与资料访问]
+  F --> D
+  D --> P[门户阅读 / 问答 / 治理操作]
