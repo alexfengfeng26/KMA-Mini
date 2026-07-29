@@ -124,7 +124,37 @@ $env:KMA_BOOTSTRAP_ADMIN_PASSWORD = "<首次启动临时密码>"
 
 首次启动创建本地管理员。临时密码首次登录后必须修改；README、日志、提交记录和截图中不得出现真实密码、令牌或 API Key。
 
-### 3. 启动前端
+### 3. 启用异步入库与 Embedding（本机开发常用）
+
+API 默认只把文档写成 `pending` 任务，不会自动解析、分块、生成向量。本机开发推荐在 API 进程里同时打开入库 Worker：
+
+```powershell
+$env:KMA_INGESTION_WORKER_ENABLED = "true"
+$env:KMA_EMBEDDING_API_KEY = "<你的 Embedding API Key>"
+$env:KMA_EMBEDDING_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
+$env:KMA_EMBEDDING_MODEL = "embedding-2"
+.\mvnw.cmd spring-boot:run
+```
+
+Embedding 配置取决于知识空间创建时选择的“Embedding 提供商”：
+
+| 空间 Embedding 提供商 | 需要配置的环境变量 | 说明 |
+| --- | --- | --- |
+| `zhipu` | `KMA_EMBEDDING_API_KEY` | 智谱 `embedding-2`，1024 维 |
+| `local-bge-m3` | `KMA_LOCAL_EMBEDDING_API_KEY` | 本地 xinference / ollama，可填任意非空占位值，如 `none` |
+
+如果现有空间用的是 `local-bge-m3` 而你只有智谱 key，可以：
+
+1. 新建一个 Embedding 提供商为 `zhipu` 的空间，把文档添加到新空间；或
+2. 给现有空间加 fallback，让 `local-bge-m3` 失败后自动切智谱：
+
+```powershell
+$env:KMA_EMBEDDING_FALLBACK_PROVIDERS = "zhipu"
+```
+
+> 注意：Windows PowerShell 环境变量用 `$env:NAME = "value"` 设置，不能像 Linux 那样写成 `NAME=value command`。设置仅在当前窗口生效。
+
+### 4. 启动前端
 
 ```powershell
 cd D:\workspace\claudecode\QuickKB\Kma_mini\kma-admin-web
@@ -141,7 +171,7 @@ npm run dev
 | `http://localhost:8090/actuator/health/readiness` | 就绪探针 |
 | `http://localhost:8090/actuator/health/liveness` | 存活探针 |
 
-### 4. 启动独立 Worker
+### 5. 启动独立 Worker
 
 API 默认只创建任务。需要执行异步入库、Embedding 重建、Feed 或治理任务时，在另一个进程启用 Worker：
 

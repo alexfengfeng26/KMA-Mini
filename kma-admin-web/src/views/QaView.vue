@@ -104,10 +104,18 @@ async function ask() {
 function onEvent(event: QaStreamEvent, data: string) {
   const current = answer.value
   if (!current) return
-  if (event === 'message') current.answer = `${current.answer || ''}${data}`
-  else if (event === 'citations') {
+  if (event === 'message') {
+    if (!data || data.trim() === '' || data.trim().toLowerCase() === 'null') return
+    current.answer = `${current.answer || ''}${data}`
+  } else if (event === 'citations') {
     try {
-      current.citations = JSON.parse(data)
+      const parsed: QaAnswer['citations'] = JSON.parse(data)
+      const seen = new Set<string>()
+      current.citations = (parsed || []).filter((item) => {
+        if (!item?.docTitle || seen.has(item.docTitle)) return false
+        seen.add(item.docTitle)
+        return true
+      })
     } catch {
       current.citations = []
     }
@@ -123,6 +131,28 @@ function onEvent(event: QaStreamEvent, data: string) {
     current.reason = 'STREAM_ERROR'
     error.value = data
   }
+}
+
+const displayAnswer = computed(() => {
+  const text = answer.value?.answer || ''
+  return text.replace(/^(null)+|(?:null)+$/gi, '').trim()
+})
+
+const displayCitations = computed(() => {
+  const list = answer.value?.citations || []
+  const seen = new Set<string>()
+  return list.filter((item) => {
+    if (!item.docTitle || seen.has(item.docTitle)) return false
+    seen.add(item.docTitle)
+    return true
+  })
+})
+
+function truncateText(value: string | undefined, max: number) {
+  if (!value) return ''
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (normalized.length <= max) return normalized
+  return normalized.slice(0, max) + '…'
 }
 
 function cancel() {
@@ -197,12 +227,12 @@ onBeforeUnmount(() => controller.value?.abort())
               >会话 {{ answer.sessionId }}</el-tag
             >
           </div>
-          <p class="answer-text">{{ answer.answer || (loading ? '正在等待模型输出…' : '未返回内容') }}</p>
+          <p class="answer-text">{{ displayAnswer || (loading ? '正在等待模型输出…' : '未返回内容') }}</p>
           <h3>引用依据</h3>
-          <ol v-if="answer.citations?.length">
-            <li v-for="item in answer.citations" :key="item.chunkId">
-              <strong>{{ item.docTitle }}</strong
-              ><span>{{ item.content }}</span>
+          <ol v-if="displayCitations.length" class="citation-list">
+            <li v-for="item in displayCitations" :key="item.chunkId">
+              <strong>{{ item.docTitle }}</strong>
+              <span class="citation-snippet">{{ truncateText(item.content, 200) }}</span>
             </li>
           </ol>
           <p v-else class="muted">暂无引用。</p>
@@ -226,3 +256,24 @@ onBeforeUnmount(() => controller.value?.abort())
     </div>
   </div>
 </template>
+
+<style scoped>
+.citation-list {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+.citation-list li {
+  margin-bottom: 0.75rem;
+  line-height: 1.5;
+}
+.citation-list li strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--el-text-color-primary);
+}
+.citation-snippet {
+  display: block;
+  color: var(--el-text-color-secondary);
+  font-size: 0.875rem;
+}
+</style>

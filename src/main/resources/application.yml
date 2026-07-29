@@ -51,7 +51,7 @@ knowledge:
     connect-timeout-seconds: ${KMA_OCR_CONNECT_TIMEOUT_SECONDS:5}
     read-timeout-seconds: ${KMA_OCR_READ_TIMEOUT_SECONDS:120}
   embedding:
-    rebuild-worker-enabled: ${KMA_EMBEDDING_REBUILD_WORKER_ENABLED:${KMA_INGESTION_WORKER_ENABLED:false}}
+    rebuild-worker-enabled: ${KMA_EMBEDDING_REBUILD_WORKER_ENABLED:${KMA_INGESTION_WORKER_ENABLED:true}}
     default-provider: ${KMA_EMBEDDING_PROVIDER:local-bge-m3}
     base-url: ${KMA_EMBEDDING_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
     model: ${KMA_EMBEDDING_MODEL:bge-m3}
@@ -63,7 +63,7 @@ knowledge:
     local:
       base-url: ${KMA_LOCAL_EMBEDDING_BASE_URL:http://localhost:9997/v1}
       model: ${KMA_LOCAL_EMBEDDING_MODEL:bge-m3}
-      api-key: ${KMA_LOCAL_EMBEDDING_API_KEY:}
+      api-key: ${KMA_LOCAL_EMBEDDING_API_KEY:c2628f2d4f55464094bbe769090ab3ac.opVuFhAWKuhlAgIB}
       max-retry: ${KMA_LOCAL_EMBEDDING_MAX_RETRY:3}
   llm:
     # New QA requests resolve the database default LLM Profile first (V26 seeds

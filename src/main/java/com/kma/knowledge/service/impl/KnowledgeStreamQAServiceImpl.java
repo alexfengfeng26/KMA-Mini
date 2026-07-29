@@ -28,8 +28,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import java.util.concurrent.Executor;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -157,8 +160,9 @@ public class KnowledgeStreamQAServiceImpl implements KnowledgeStreamQAService {
 
                 String prompt = promptAssembler.buildPromptWithHistory(inputInspection.sanitized(), hits, history);
 
-                // 发送引用元数据事件
-                emitter.send(SseEmitter.event().name("citations").data(objectMapper.writeValueAsString(hits)));
+                // 发送引用元数据事件：按文档去重并截断正文，避免前端展示冗长重复内容
+                List<ChunkHitVO> displayCitations = sanitizeCitations(hits);
+                emitter.send(SseEmitter.event().name("citations").data(objectMapper.writeValueAsString(displayCitations)));
 
                 // 调用统一流式 LLM；主模型失败时由工厂客户端按配置自动降级。
                 KnowledgeProperties.LlmProperties llmProps = properties.getLlm();
@@ -184,8 +188,14 @@ public class KnowledgeStreamQAServiceImpl implements KnowledgeStreamQAService {
                         throw new CancellationException("SSE client disconnected");
                     }
                     assertStreamAuthorization(spaceCode, streamPrincipal);
+                    if (!isValidChunk(chunk)) {
+                        return;
+                    }
                     String safeChunk = contentSecurity == null ? chunk
                         : contentSecurity.processModelOutput(chunk, "space:" + spaceCode).sanitized();
+                    if (!isValidChunk(safeChunk)) {
+                        return;
+                    }
                     answerBuilder.append(safeChunk);
                     try {
                         emitter.send(SseEmitter.event().name("message").data(safeChunk));
@@ -218,7 +228,7 @@ public class KnowledgeStreamQAServiceImpl implements KnowledgeStreamQAService {
                     emitter.send(SseEmitter.event().name("error").data("服务异常：" + e.getMessage()));
                 } catch (IOException ignored) {
                 }
-                emitter.completeWithError(e);
+                emitter.complete();
             } finally {
                 cancelled.set(true);
                 heartbeat.cancel(false);
@@ -239,6 +249,76 @@ public class KnowledgeStreamQAServiceImpl implements KnowledgeStreamQAService {
         authorizationStateService.assertCurrent(principal);
         if (!aclService.hasReadAccess(spaceCode, principal))
             throw new com.kma.common.exception.KmaException(401, "AUTHORIZATION_REVOKED");
+    }
+
+    private boolean isValidChunk(String chunk) {
+        if (chunk == null || chunk.isEmpty()) {
+            return false;
+        }
+        // 过滤模型输出的连续/单独 "null" 乱码片段
+        String trimmed = chunk.trim();
+        if (trimmed.isEmpty() || "null".equalsIgnoreCase(trimmed)) {
+            return false;
+        }
+        return true;
+    }
+
+    private List<ChunkHitVO> sanitizeCitations(List<ChunkHitVO> hits) {
+        if (hits == null) {
+            return List.of();
+        }
+        Map<Long, ChunkHitVO> byDoc = new LinkedHashMap<>();
+        for (ChunkHitVO hit : hits) {
+            Long docId = hit.getDocId();
+            if (docId == null) {
+                docId = hit.getChunkId();
+            }
+            ChunkHitVO existing = byDoc.get(docId);
+            if (existing == null || (hit.getScore() != null
+                && (existing.getScore() == null || hit.getScore() > existing.getScore()))) {
+                ChunkHitVO copy = copyForDisplay(hit);
+                byDoc.put(docId, copy);
+            }
+        }
+        return byDoc.values().stream().limit(6).collect(Collectors.toList());
+    }
+
+    private ChunkHitVO copyForDisplay(ChunkHitVO source) {
+        ChunkHitVO copy = new ChunkHitVO();
+        copy.setChunkId(source.getChunkId());
+        copy.setDocId(source.getDocId());
+        copy.setSpaceId(source.getSpaceId());
+        copy.setSpaceCode(source.getSpaceCode());
+        copy.setDocTitle(source.getDocTitle());
+        copy.setSourceTag(source.getSourceTag());
+        copy.setExternalRef(source.getExternalRef());
+        copy.setContent(truncate(source.getContent(), 400));
+        copy.setScore(source.getScore());
+        copy.setVectorScore(source.getVectorScore());
+        copy.setFullTextScore(source.getFullTextScore());
+        copy.setRrfScore(source.getRrfScore());
+        copy.setRerankScore(source.getRerankScore());
+        copy.setSourceStage(source.getSourceStage());
+        copy.setChunkIndex(source.getChunkIndex());
+        copy.setMeta(source.getMeta());
+        copy.setDocumentNumber(source.getDocumentNumber());
+        copy.setIssuingAuthority(source.getIssuingAuthority());
+        copy.setPublishDate(source.getPublishDate());
+        copy.setValidityStatus(source.getValidityStatus());
+        copy.setPageNumber(source.getPageNumber());
+        copy.setSection(source.getSection());
+        return copy;
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null) {
+            return "";
+        }
+        String normalized = value.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= maxLength) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLength) + "…";
     }
 }
 

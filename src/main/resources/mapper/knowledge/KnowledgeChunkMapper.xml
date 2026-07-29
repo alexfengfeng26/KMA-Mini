@@ -57,7 +57,11 @@
             </foreach>
         </if>
         <if test="filters != null and filters.portalOnly != null and filters.portalOnly">
-            AND d.publication_managed = TRUE AND d.workflow_status = 'published' AND d.online = TRUE
+            AND (
+              (d.publication_managed = TRUE AND d.workflow_status = 'published' AND d.online = TRUE)
+              OR
+              (d.publication_managed = FALSE AND d.parse_status = 'completed')
+            )
             AND (d.validity_status &lt;&gt; 'effective' OR
               ((d.effective_date IS NULL OR d.effective_date &lt;= CURRENT_DATE)
                AND (d.expiry_date IS NULL OR d.expiry_date &gt;= CURRENT_DATE)))
@@ -99,7 +103,11 @@
             </foreach>
         </if>
         <if test="filters != null and filters.portalOnly != null and filters.portalOnly">
-            AND d.publication_managed = TRUE AND d.workflow_status = 'published' AND d.online = TRUE
+            AND (
+              (d.publication_managed = TRUE AND d.workflow_status = 'published' AND d.online = TRUE)
+              OR
+              (d.publication_managed = FALSE AND d.parse_status = 'completed')
+            )
             AND (d.validity_status &lt;&gt; 'effective' OR
               ((d.effective_date IS NULL OR d.effective_date &lt;= CURRENT_DATE)
                AND (d.expiry_date IS NULL OR d.expiry_date &gt;= CURRENT_DATE)))

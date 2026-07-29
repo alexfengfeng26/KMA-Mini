@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { api, asList, errorMessage, unwrap } from '../api/client'
 import AppPagination from '../components/AppPagination.vue'
 import PageState from '../components/PageState.vue'
@@ -10,6 +10,7 @@ import { useMutationAction } from '../composables/useMutationAction'
 
 type DocumentRow = components['schemas']['DocVO']
 type DocumentVersion = Record<string, unknown>
+type Space = components['schemas']['SpaceVO']
 const mutation = useMutationAction()
 
 const rows = ref<DocumentRow[]>([]),
@@ -29,7 +30,10 @@ const {
 const dialog = ref(false),
   versionsDialog = ref(false),
   file = ref<File>(),
-  mode = ref<'file' | 'text'>('file')
+  mode = ref<'file' | 'text'>('file'),
+  spaces = ref<Space[]>([]),
+  spacesLoading = ref(false)
+const activeSpaces = computed(() => spaces.value.filter((s) => s.status === 'active'))
 const filters = reactive({ title: '', spaceCode: '', parseStatus: '' })
 const form = reactive({
   spaceCode: 'default',
@@ -70,22 +74,43 @@ async function load(reset = false) {
     loading.value = false
   }
 }
+async function loadSpaces() {
+  spacesLoading.value = true
+  try {
+    const result = readServerPage<Space>(
+      await unwrap(
+        api.GET('/api/v1/spaces/page', {
+          params: { query: { pageNum: 1, pageSize: 100 } },
+        }),
+      ),
+      1,
+      100,
+    )
+    spaces.value = result.items
+  } catch (e: unknown) {
+    ElMessage.error(errorMessage(e, '无法读取知识空间'))
+  } finally {
+    spacesLoading.value = false
+  }
+}
 function openIngest() {
   mode.value = 'file'
   file.value = undefined
   Object.assign(form, {
-    spaceCode: 'default',
+    spaceCode: '',
     title: '',
     content: '',
     externalRef: '',
     sourceTag: 'manual',
     sourceVersion: 1,
   })
+  loadSpaces()
   dialog.value = true
 }
 async function ingest() {
   const externalRef = form.externalRef || crypto.randomUUID()
   const result = await mutation.run(async () => {
+    if (!form.spaceCode) throw new Error('请选择知识空间')
     if (mode.value === 'file') {
       if (!file.value) throw new Error('请选择需要上传的文件')
       await unwrap(
@@ -255,7 +280,21 @@ onMounted(load)
     <el-form label-position="top"
       ><el-row :gutter="12"
         ><el-col :span="12"
-          ><el-form-item label="空间编码"><el-input v-model="form.spaceCode" /></el-form-item></el-col
+          ><el-form-item label="知识空间"
+            ><el-select
+              v-model="form.spaceCode"
+              placeholder="请选择知识空间"
+              :loading="spacesLoading"
+              filterable
+              clearable
+              style="width: 100%"
+            >
+              <el-option
+                v-for="space in activeSpaces"
+                :key="space.spaceCode"
+                :label="`${space.name || space.spaceCode} (${space.spaceCode})`"
+                :value="space.spaceCode"
+              /> </el-select></el-form-item></el-col
         ><el-col :span="12"
           ><el-form-item label="业务引用"
             ><el-input
@@ -287,7 +326,9 @@ onMounted(load)
         type="primary"
         :loading="mutation.pending.value"
         :disabled="
-          mutation.pending.value || (mode === 'file' ? !file : !form.title.trim() || !form.content.trim())
+          mutation.pending.value ||
+          !form.spaceCode ||
+          (mode === 'file' ? !file : !form.title.trim() || !form.content.trim())
         "
         @click="ingest"
         >提交入库</el-button

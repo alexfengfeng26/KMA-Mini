@@ -1,8 +1,10 @@
 package com.kma.knowledge.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.kma.knowledge.config.JsonbStringTypeHandler;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -84,6 +86,7 @@ public class KnowledgeDoc implements Serializable {
     private String summary;
 
     /** JSON array of normalized keyword strings. */
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
     private String keywords;
 
     private Long reviewerId;
@@ -113,6 +116,7 @@ public class KnowledgeDoc implements Serializable {
     /**
      * JSONB：业务自定义元数据
      */
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
     private String meta;
 
     private LocalDateTime createTime;

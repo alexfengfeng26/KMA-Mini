@@ -61,15 +61,22 @@ public class CitationSecurityService {
         for (ChunkHitVO hit : hits) {
             KnowledgeChunk chunk = chunks.get(hit.getChunkId());
             KnowledgeDoc doc = chunk == null ? null : docs.get(chunk.getDocId());
+            boolean portalVisible = !portalOnly || isPortalVisible(doc);
             if (chunk == null || !space.getSpaceId().equals(chunk.getSpaceId()) || doc == null
                 || !Boolean.TRUE.equals(doc.getIsActive()) || !space.getSpaceId().equals(doc.getSpaceId())
-                || (portalOnly && (!Boolean.TRUE.equals(doc.getPublicationManaged())
-                    || !"published".equals(doc.getWorkflowStatus()) || !Boolean.TRUE.equals(doc.getOnline())))) {
+                || !portalVisible) {
                 throw new AccessDeniedException("引用权限复核失败");
             }
             ContentSecurityService.Inspection inspection = contentSecurity.sanitizeReference(
                 hit.getContent(), "chunk:" + hit.getChunkId());
             hit.setContent(inspection.sanitized());
         }
+    }
+
+    private boolean isPortalVisible(KnowledgeDoc doc) {
+        if (Boolean.TRUE.equals(doc.getPublicationManaged())) {
+            return "published".equals(doc.getWorkflowStatus()) && Boolean.TRUE.equals(doc.getOnline());
+        }
+        return "completed".equals(doc.getParseStatus());
     }
 }
