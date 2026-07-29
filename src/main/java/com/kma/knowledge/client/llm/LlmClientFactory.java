@@ -64,6 +64,11 @@ public class LlmClientFactory {
         return new FallbackLlmClient(profileCode, chain, clients, metricsRecorder);
     }
 
+    /** Creates a single-profile client. Probes must never silently pass through a fallback. */
+    public LlmClient getSingleProfile(String profileCode) {
+        return new ProfileLlmClient(profileResolver.resolve(profileCode, "llm"), objectMapper);
+    }
+
     public LlmClient get(String provider) {
         if (!StringUtils.hasText(provider)) {
             throw new IllegalArgumentException("LLM 提供商不能为空");

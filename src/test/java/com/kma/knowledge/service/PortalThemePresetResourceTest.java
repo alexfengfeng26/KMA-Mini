@@ -19,7 +19,7 @@ class PortalThemePresetResourceTest {
 
     @Test
     void checkedInBuiltInThemePackagesPassTheSameSecurityPolicy() throws Exception {
-        for (String themeKey : List.of("heritage-red", "governance-blue", "ink-night")) {
+        for (String themeKey : List.of("heritage-red", "governance-blue", "ink-night", "help-center", "metro-daily")) {
             String root = "portal-themes/" + themeKey + "/";
             JsonNode manifest;
             try (InputStream input = new ClassPathResource(root + "theme.json").getInputStream()) {

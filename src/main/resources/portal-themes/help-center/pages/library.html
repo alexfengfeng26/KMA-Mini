@@ -1,0 +1,16 @@
+<header class="page-title">
+  <p class="kicker">Documentation</p>
+  <h1>文档库</h1>
+  <p class="page-sub">全部收录文档，按收录时间倒序。</p>
+</header>
+<div class="doc-rows">
+  {% for item in recent %}
+  <button type="button" class="doc-row" data-kma-content="{{ item.contentId }}">
+    <span class="doc-row-main">
+      <strong>{{ item.title }}</strong>
+      <em>{{ item.issuingAuthority }} · {{ item.publishDate }}</em>
+    </span>
+    <i>→</i>
+  </button>
+  {% endfor %}
+</div>

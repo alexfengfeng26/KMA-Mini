@@ -62,6 +62,22 @@ class ModelProfileServiceImplTest {
         assertThat(created.getUpdateTime()).isEqualTo(created.getCreateTime());
     }
 
+    @Test
+    void requiresProbeActivationPathForLlmDefault() {
+        ModelProfileServiceImpl service = new ModelProfileServiceImpl(
+            mock(ModelProfileMapper.class), mock(KnowledgeDatasetMapper.class));
+        ModelProfileRequest request = new ModelProfileRequest();
+        request.setProfileCode("deepseek-v4-flash");
+        request.setName("DeepSeek V4 Flash");
+        request.setCapability("llm");
+        request.setProvider("deepseek");
+        request.setModelName("deepseek-v4-flash");
+        request.setDefaultProfile(true);
+
+        assertThatThrownBy(() -> service.create(request)).isInstanceOf(KmaException.class)
+            .hasMessageContaining("先测试连接");
+    }
+
     private ModelProfile profile(String code, String model, int dimension) {
         ModelProfile profile = new ModelProfile();
         profile.setProfileCode(code);

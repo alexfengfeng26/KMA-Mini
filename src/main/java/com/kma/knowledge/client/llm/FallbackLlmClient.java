@@ -22,6 +22,7 @@ public class FallbackLlmClient implements LlmClient {
     private final List<String> chain;
     private final Map<String, LlmClient> clientMap;
     private final RagMetricsRecorder metricsRecorder;
+    private final ThreadLocal<String> executedProvider = new ThreadLocal<>();
 
     public FallbackLlmClient(String primary,
                              List<String> chain,
@@ -39,6 +40,17 @@ public class FallbackLlmClient implements LlmClient {
     }
 
     @Override
+    public String executedProvider() {
+        return executedProvider.get() == null ? primary : executedProvider.get();
+    }
+
+    @Override
+    public String model() {
+        LlmClient selected = clientMap.get(executedProvider());
+        return selected == null ? null : selected.model();
+    }
+
+    @Override
     public LlmChatResponse chat(LlmChatRequest request) {
         Exception lastException = null;
         for (int i = 0; i < chain.size(); i++) {
@@ -50,6 +62,7 @@ public class FallbackLlmClient implements LlmClient {
             }
             try {
                 LlmChatResponse response = client.chat(request);
+                executedProvider.set(provider);
                 if (i > 0 && metricsRecorder != null) {
                     metricsRecorder.recordModelFallback("llm", primary, provider);
                     log.info("LLM 已降级到备用提供商, primary={}, fallback={}", primary, provider);
@@ -79,6 +92,7 @@ public class FallbackLlmClient implements LlmClient {
                     emitted.set(true);
                     onChunk.accept(chunk);
                 });
+                executedProvider.set(provider);
                 if (i > 0 && metricsRecorder != null) {
                     metricsRecorder.recordModelFallback("llm-stream", primary, provider);
                     log.info("流式 LLM 已降级到备用提供商, primary={}, fallback={}", primary, provider);

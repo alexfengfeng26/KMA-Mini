@@ -1,0 +1,73 @@
+<section class="headline-zone">
+  {% for item in recent %}
+  <article class="headline-item">
+    <h2><button type="button" data-kma-content="{{ item.contentId }}">{{ item.title }}</button></h2>
+    <p>{{ item.summary | truncate: 64 }}</p>
+  </article>
+  {% endfor %}
+</section>
+<div class="portal-grid">
+  <aside class="col-side">
+    <section class="channel">
+      <h3 class="channel-title">专题栏目</h3>
+      <ul class="link-list">
+        {% for topic in topics %}
+        <li><button type="button" data-kma-topic="{{ topic.topicCode }}">{{ topic.name }}</button></li>
+        {% endfor %}
+      </ul>
+    </section>
+    <section class="channel">
+      <h3 class="channel-title">分类浏览</h3>
+      <div class="tag-cloud">
+        {% for cat in data.categories %}
+        <a href="#" data-kma-nav="library" class="tag">{{ cat.name }}({{ cat.total }})</a>
+        {% endfor %}
+      </div>
+    </section>
+  </aside>
+  <section class="col-main">
+    <h3 class="channel-title main-title">最新资讯</h3>
+    <ul class="news-list">
+      {% for item in recent %}
+      <li>
+        <button type="button" data-kma-content="{{ item.contentId }}">
+          <span class="news-title"><em>[{{ item.contentType }}]</em> {{ item.title }}</span>
+          <time>{{ item.publishDate }}</time>
+        </button>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  <aside class="col-side">
+    <section class="channel ask-box">
+      <h3 class="channel-title">AI 问答</h3>
+      <p>基于收录资料作答，结论附出处。</p>
+      <a href="#" data-kma-nav="ask" class="ask-entry">进入问答 →</a>
+    </section>
+    <section class="channel" data-auto-hide>
+      <h3 class="channel-title">我的收藏</h3>
+      <ul class="link-list">
+        {% for fav in favorites %}
+        <li><button type="button" data-kma-content="{{ fav.docId }}">{{ fav.title | truncate: 22 }}</button></li>
+        {% endfor %}
+      </ul>
+    </section>
+    <section class="channel" data-auto-hide>
+      <h3 class="channel-title">最近浏览</h3>
+      <ul class="link-list">
+        {% for item in history %}
+        <li><button type="button" data-kma-content="{{ item.docId }}">{{ item.title | truncate: 22 }}</button></li>
+        {% endfor %}
+      </ul>
+    </section>
+  </aside>
+</div>
+<section class="floors">
+  {% for topic in topics %}
+  <article class="floor">
+    <h3 class="floor-title">{{ topic.name }}</h3>
+    <p>{{ topic.description | truncate: 60 }}</p>
+    <button type="button" data-kma-topic="{{ topic.topicCode }}">进入栏目 →</button>
+  </article>
+  {% endfor %}
+</section>

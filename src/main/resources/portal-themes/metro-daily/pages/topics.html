@@ -1,0 +1,13 @@
+<header class="page-title">
+  <h1>栏目大全</h1>
+  <p class="page-sub">按栏目浏览专题内容。</p>
+</header>
+<section class="floors floors-page">
+  {% for topic in topics %}
+  <article class="floor">
+    <h3 class="floor-title">{{ topic.name }}</h3>
+    <p>{{ topic.description | truncate: 72 }}</p>
+    <button type="button" data-kma-topic="{{ topic.topicCode }}">进入栏目 →</button>
+  </article>
+  {% endfor %}
+</section>

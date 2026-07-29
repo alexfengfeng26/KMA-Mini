@@ -1,0 +1,9 @@
+{
+  "themeKey": "metro-daily",
+  "displayName": "都市资讯门户",
+  "description": "信息密集的综合门户：头条要闻、多栏分栏、栏目楼层与紧凑列表",
+  "kind": "portal-theme",
+  "entry": "layout.html",
+  "capabilities": ["page-context", "contents", "search", "ask", "analytics", "navigation"],
+  "files": ["layout.html", "pages/home.html", "pages/library.html", "pages/topics.html", "pages/ask.html", "pages/content.html", "pages/search.html", "pages/favorites.html", "pages/profile.html", "styles/theme.css", "scripts/theme.js"]
+}

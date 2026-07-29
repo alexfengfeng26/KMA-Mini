@@ -2,6 +2,7 @@
 import type { editor as MonacoEditor } from 'monaco-editor/editor/editor.api.js'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   getPortalPreviewBootstrap,
   getPortalThemeWorkspace,
@@ -22,6 +23,7 @@ import {
 import type { PortalBootstrap, PortalThemeRuntime } from '../../cms/siteConfig'
 import { buildThemeDocument } from '../../cms/v4/themeRuntime'
 import { useAuthStore } from '../../stores/auth'
+import { consolePath } from '../../security/siteRoute'
 
 const sites = ref<Array<{ siteKey: string; name: string }>>([])
 const siteKey = ref('default')
@@ -78,6 +80,7 @@ const selectedTheme = computed(() =>
   themeCatalog.value.find((theme) => theme.themeKey === selectedThemeKey.value),
 )
 const auth = useAuthStore()
+const router = useRouter()
 const canDirectPublish = computed(() =>
   ['portal-site:update', 'portal-page:edit', 'portal-code:edit', 'portal-site:publish'].every(
     (permission) => auth.permissions.has('kma:admin') || auth.permissions.has(permission),
@@ -375,6 +378,24 @@ async function previewSaved() {
   if (previewWindow) previewWindow.opener = null
 }
 
+async function returnToConsole() {
+  if (!dirty.value) return router.push(consolePath('/console'))
+  try {
+    await ElMessageBox.confirm('当前主题文件有未保存修改。', '返回后台管理', {
+      confirmButtonText: '保存后返回',
+      cancelButtonText: '放弃返回',
+      distinguishCancelAndClose: true,
+      type: 'warning',
+    })
+    if (await save()) await router.push(consolePath('/console'))
+  } catch (reason) {
+    if (reason === 'cancel') {
+      dirty.value = false
+      await router.push(consolePath('/console'))
+    }
+  }
+}
+
 async function generateAiTheme() {
   const current = workspace.value
   if (!current || !aiInstruction.value.trim()) return
@@ -494,6 +515,7 @@ onBeforeUnmount(() => editorInstance?.dispose())
 <template>
   <div class="theme-studio" v-loading="loading">
     <header class="studio-toolbar">
+      <el-button text class="return-console" @click="returnToConsole">← 返回后台管理</el-button>
       <div class="studio-title">
         <strong>Portal Theme V4</strong>
         <span>全站主题工作台</span>
@@ -723,6 +745,11 @@ onBeforeUnmount(() => editorInstance?.dispose())
   border-bottom: 1px solid #283448;
 }
 
+.return-console {
+  flex: 0 0 auto;
+  color: #a8c7ef;
+}
+
 .theme-switcher {
   display: flex;
   gap: 8px;
@@ -788,6 +815,14 @@ onBeforeUnmount(() => editorInstance?.dispose())
 
 .theme-swatch--ink-night {
   background: linear-gradient(135deg, #111817, #e6bf72);
+}
+
+.theme-swatch--help-center {
+  background: linear-gradient(135deg, #2160fd, #bcd3ff);
+}
+
+.theme-swatch--metro-daily {
+  background: linear-gradient(135deg, #1e50a2, #c00);
 }
 
 @media (width <= 980px) {

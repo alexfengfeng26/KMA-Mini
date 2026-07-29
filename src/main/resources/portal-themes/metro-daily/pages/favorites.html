@@ -1,0 +1,14 @@
+<header class="page-title">
+  <h1>我的收藏</h1>
+  <p class="page-sub">收藏过的资讯，随时回看。</p>
+</header>
+<ul class="news-list page-list">
+  {% for fav in favorites %}
+  <li>
+    <button type="button" data-kma-content="{{ fav.docId }}">
+      <span class="news-title">{{ fav.title }}</span>
+      <time>{{ fav.lastReadAt }}</time>
+    </button>
+  </li>
+  {% endfor %}
+</ul>

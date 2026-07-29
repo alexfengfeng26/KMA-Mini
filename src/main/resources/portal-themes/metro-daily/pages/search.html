@@ -1,0 +1,14 @@
+<header class="page-title">
+  <h1>搜索结果</h1>
+  <p class="page-sub">与当前检索条件匹配的资讯。</p>
+</header>
+<ul class="news-list page-list">
+  {% for item in recent %}
+  <li>
+    <button type="button" data-kma-content="{{ item.contentId }}">
+      <span class="news-title"><em>[{{ item.contentType }}]</em> {{ item.title }}</span>
+      <time>{{ item.publishDate }}</time>
+    </button>
+  </li>
+  {% endfor %}
+</ul>

@@ -182,12 +182,12 @@ docker compose up --build
 | 能力 | 默认本地/配置 | 说明 |
 | --- | --- | --- |
 | Embedding | `local-bge-m3` / `http://localhost:9997/v1` / `bge-m3` | 支持 Profile、主备链和向量重建 |
-| LLM | `ollama` / `http://localhost:11434/v1` / `qwen2.5` | 支持普通与 SSE 流式问答 |
+| LLM | 默认 Profile：DeepSeek `deepseek-v4-flash` | 后台“模型能力配置”可测试后切换 DeepSeek、Kimi、智谱 GLM、Qwen、MiniMax；支持普通与 SSE 流式问答 |
 | 门户 AI 设计 | DeepSeek / `deepseek-v4-flash` | 仅生成设计候选，不切换知识问答模型 |
 | Reranker | 可选 | 不可用时降级为 RRF 排序 |
 | OCR / MinIO | 可选 | 通过环境变量启用，不影响基础 API 启动 |
 
-模型不可用时依赖状态可显示 `DEGRADED`，能力返回明确错误或受控降级。密钥只从进程环境或 Secret Provider 读取；不得写入数据库、前端响应、仓库或日志。
+模型不可用时依赖状态可显示 `DEGRADED`，能力返回明确错误或受控降级。知识问答优先读取数据库中已激活的 LLM Profile；`application.yml` 的 `knowledge.llm` 仅是兼容回退。管理员在“模型能力配置”先测试非流式和 SSE 流式连接，成功后才可设为默认，切换只影响新发起的问答。可选密钥环境变量为 `KMA_DEEPSEEK_API_KEY`、`KMA_KIMI_API_KEY`、`KMA_ZHIPU_API_KEY`、`KMA_DASHSCOPE_API_KEY`、`KMA_MINIMAX_API_KEY`。密钥只从进程环境或 Secret Provider 读取；不得写入数据库、前端响应、仓库或日志。
 
 ## 门户主题工作台与本地源码同步
 
@@ -201,7 +201,9 @@ docker compose up --build
 src/main/resources/portal-themes/
 ├── heritage-red/    # 党建典藏红
 ├── governance-blue/ # 政务知蓝
-└── ink-night/       # 墨玉夜读
+├── ink-night/       # 墨玉夜读
+├── help-center/     # 轻云帮助中心
+└── metro-daily/     # 都市资讯门户
 ```
 
 每套包含 `theme.json`、`layout.html`、`pages/*.html`、`styles/theme.css` 与 `scripts/theme.js`。开发环境默认从该目录读取；可用 `KMA_PORTAL_THEME_SOURCE_DIR` 指定其他目录。若目录不存在，应用回退读取 JAR 内资源。

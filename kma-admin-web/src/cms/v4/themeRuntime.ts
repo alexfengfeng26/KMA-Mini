@@ -154,16 +154,19 @@ const sdkScript = String.raw`
     content:{open:(id)=>request('portal.content.open',String(id||''))},
     analytics:{track:(value)=>request('portal.analytics.track',value)}
   });
-  const navigate = target => {
+  const withNavigationLock = (fn) => {
     if(navigationPending) return;
     navigationPending=true;
-    window.portal.navigation.go(target).catch(()=>{navigationPending=false});
+    Promise.resolve(fn()).finally(()=>{navigationPending=false});
   };
+  const navigate = target => withNavigationLock(() => window.portal.navigation.go(target));
+  const openContent = id => withNavigationLock(() => window.portal.content.open(id));
+  const openTopic = code => withNavigationLock(() => window.portal.navigation.go('topics?topic='+encodeURIComponent(code)));
   document.addEventListener('click',event=>{
     const target=event.target instanceof Element ? event.target : null; if(!target)return;
     const nav=target.closest('[data-kma-nav]'); if(nav){event.preventDefault();navigate(nav.dataset.kmaNav);return;}
-    const content=target.closest('[data-kma-content]'); if(content){event.preventDefault();if(!navigationPending){navigationPending=true;window.portal.content.open(content.dataset.kmaContent).catch(()=>{navigationPending=false});}return;}
-    const topic=target.closest('[data-kma-topic]'); if(topic){event.preventDefault();navigate('topics?topic='+encodeURIComponent(topic.dataset.kmaTopic));}
+    const content=target.closest('[data-kma-content]'); if(content){event.preventDefault();openContent(content.dataset.kmaContent);return;}
+    const topic=target.closest('[data-kma-topic]'); if(topic){event.preventDefault();openTopic(topic.dataset.kmaTopic);}
   });
   document.addEventListener('click',async event=>{
     if(event.target?.id!=='kma-ai-submit')return;

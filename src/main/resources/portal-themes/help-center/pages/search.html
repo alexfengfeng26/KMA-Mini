@@ -1,0 +1,16 @@
+<header class="page-title">
+  <p class="kicker">Search Results</p>
+  <h1>搜索结果</h1>
+  <p class="page-sub">与当前检索条件匹配的文档。</p>
+</header>
+<div class="doc-rows">
+  {% for item in recent %}
+  <button type="button" class="doc-row" data-kma-content="{{ item.contentId }}">
+    <span class="doc-row-main">
+      <strong>{{ item.title }}</strong>
+      <em>{{ item.issuingAuthority }} · {{ item.publishDate }}</em>
+    </span>
+    <i>→</i>
+  </button>
+  {% endfor %}
+</div>

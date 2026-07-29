@@ -1,0 +1,22 @@
+<div class="kma-site">
+  <div class="utility-bar">
+    <span>可信知识 · 有据可查</span>
+    <span>{{ site.name }} 欢迎您</span>
+  </div>
+  <header class="masthead">
+    <a href="#" data-kma-nav="home" class="brand">{{ site.name }}</a>
+    <nav class="site-nav" aria-label="主导航">
+      <a href="#" data-kma-nav="home">首页</a>
+      <a href="#" data-kma-nav="library">资讯</a>
+      <a href="#" data-kma-nav="topics">栏目</a>
+      <a href="#" data-kma-nav="ask">问答</a>
+      <a href="#" data-kma-nav="favorites">收藏</a>
+      <a href="#" data-kma-nav="profile">我的</a>
+    </nav>
+  </header>
+  <main class="site-main"><kma-slot name="content" /></main>
+  <footer class="site-footer">
+    <p>{{ site.name }}</p>
+    <p>资讯 · 栏目 · 问答 · 收藏</p>
+  </footer>
+</div>

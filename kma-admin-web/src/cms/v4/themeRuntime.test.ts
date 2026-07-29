@@ -44,6 +44,8 @@ describe('Portal Theme V4 runtime', () => {
     expect(document).toContain("connect-src 'none'")
     expect(document).toContain('event.preventDefault()')
     expect(document).toContain('let navigationPending = false')
+    expect(document).toContain('withNavigationLock')
+    expect(document).toContain('.finally(()=>{navigationPending=false})')
     expect(document).not.toContain('<script>unsafe</script>')
   })
 

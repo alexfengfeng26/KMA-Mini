@@ -15,6 +15,11 @@ public interface LlmClient {
      */
     String provider();
 
+    /** Provider/model actually selected for the current request where known. */
+    default String executedProvider() { return provider(); }
+
+    default String model() { return null; }
+
     /**
      * 非流式对话
      */

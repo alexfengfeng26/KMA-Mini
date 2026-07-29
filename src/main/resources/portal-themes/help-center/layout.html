@@ -1,0 +1,22 @@
+<div class="kma-site">
+  <header class="masthead">
+    <a href="#" data-kma-nav="home" class="brand">
+      <span class="brand-mark" aria-hidden="true">助</span>
+      <span class="brand-text"><strong>{{ site.name }}</strong></span>
+    </a>
+    <nav class="site-nav" aria-label="主导航">
+      <a href="#" data-kma-nav="home">首页</a>
+      <a href="#" data-kma-nav="library">文档库</a>
+      <a href="#" data-kma-nav="topics">主题</a>
+      <a href="#" data-kma-nav="ask">AI 问答</a>
+      <a href="#" data-kma-nav="favorites">收藏</a>
+      <a href="#" data-kma-nav="profile">我的</a>
+    </nav>
+    <a href="#" data-kma-nav="search" class="search-pill">搜索文档…</a>
+  </header>
+  <main class="site-main"><kma-slot name="content" /></main>
+  <footer class="site-footer">
+    <p>{{ site.name }} · 帮助中心</p>
+    <p>文档、问答与主题导航，一站解决</p>
+  </footer>
+</div>

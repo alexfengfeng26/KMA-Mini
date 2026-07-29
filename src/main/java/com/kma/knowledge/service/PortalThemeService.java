@@ -41,7 +41,8 @@ import java.util.zip.ZipOutputStream;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "knowledge", name = "enabled", havingValue = "true", matchIfMissing = false)
 public class PortalThemeService {
-    private static final List<String> BUILT_IN_THEME_KEYS = List.of("heritage-red", "governance-blue", "ink-night");
+    private static final List<String> BUILT_IN_THEME_KEYS = List.of(
+        "heritage-red", "governance-blue", "ink-night", "help-center", "metro-daily");
     private final JdbcTemplate knowledgeJdbcTemplate;
     private final ObjectMapper objectMapper;
     private final SecurityAuditService auditService;
@@ -137,7 +138,8 @@ public class PortalThemeService {
             FROM knowledge_portal_theme t
             JOIN knowledge_portal_theme_version v ON v.theme_version_id=t.current_version_id
             WHERE t.site_id=? ORDER BY CASE t.theme_key WHEN 'heritage-red' THEN 0
-              WHEN 'governance-blue' THEN 1 WHEN 'ink-night' THEN 2 ELSE 9 END, t.display_name
+              WHEN 'governance-blue' THEN 1 WHEN 'ink-night' THEN 2
+              WHEN 'help-center' THEN 3 WHEN 'metro-daily' THEN 4 ELSE 9 END, t.display_name
             """, siteId);
         String checkedAt = Instant.now().toString();
         result.forEach(theme -> {

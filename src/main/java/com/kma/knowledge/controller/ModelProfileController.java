@@ -2,6 +2,7 @@ package com.kma.knowledge.controller;
 
 import com.kma.common.result.ApiResult;
 import com.kma.knowledge.dto.ModelProfileRequest;
+import com.kma.knowledge.dto.ModelProfileProbeResult;
 import com.kma.knowledge.entity.ModelProfile;
 import com.kma.knowledge.service.ModelProfileService;
 import jakarta.validation.Valid;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -41,5 +43,17 @@ public class ModelProfileController {
     @PreAuthorize("@ss.hasPermi('model:update')")
     public ApiResult<ModelProfile> update(@Valid @RequestBody ModelProfileRequest request) {
         return ApiResult.success(modelProfileService.update(request));
+    }
+
+    @PostMapping("/{profileCode}/probe")
+    @PreAuthorize("@ss.hasPermi('model:update')")
+    public ApiResult<ModelProfileProbeResult> probe(@PathVariable String profileCode) {
+        return ApiResult.success(modelProfileService.probe(profileCode));
+    }
+
+    @PostMapping("/{profileCode}/activate-default")
+    @PreAuthorize("@ss.hasPermi('model:update')")
+    public ApiResult<ModelProfile> activateDefault(@PathVariable String profileCode) {
+        return ApiResult.success(modelProfileService.activateDefault(profileCode));
     }
 }

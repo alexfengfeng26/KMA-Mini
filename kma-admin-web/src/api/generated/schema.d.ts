@@ -200,6 +200,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/portal-sites/{siteKey}/theme-workspace/{themeVersionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/portal-sites/{siteKey}/drafts/{versionId}": {
         parameters: {
             query?: never;
@@ -273,6 +289,22 @@ export interface paths {
         };
         get?: never;
         put: operations["move"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/governance/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["policy"];
+        put: operations["updatePolicy"];
         post?: never;
         delete?: never;
         options?: never;
@@ -404,6 +436,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["streamAnswer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portal/qa-feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["record"];
         delete?: never;
         options?: never;
         head?: never;
@@ -548,6 +596,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/model-profiles/{profileCode}/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["probe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/model-profiles/{profileCode}/activate-default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["activateDefault"];
         delete?: never;
         options?: never;
         head?: never;
@@ -891,6 +971,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/qa-feedback/{feedbackId}/evaluation-case": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["convert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/portal-sites": {
         parameters: {
             query?: never;
@@ -907,6 +1003,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/portal-sites/{siteKey}/versions/{versionId}/preview/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewAsk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/portal-sites/{siteKey}/versions/{versionId}/preview/ask/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewAskStream"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/portal-sites/{siteKey}/validate": {
         parameters: {
             query?: never;
@@ -917,6 +1045,86 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["validate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/portal-sites/{siteKey}/theme-workspace/{themeVersionId}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["importTheme"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/portal-sites/{siteKey}/theme-workspace/{themeVersionId}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/portal-sites/{siteKey}/theme-workspace/{themeVersionId}/ai-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["propose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/portal-sites/{siteKey}/theme-workspace/{themeKey}/publish-immediately": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["publishImmediately"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/portal-sites/{siteKey}/theme-workspace/{themeKey}/local-source/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["syncLocalSource"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1029,6 +1237,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/portal-code/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["validateSource"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1413,6 +1637,54 @@ export interface paths {
             cookie?: never;
         };
         get: operations["page_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/security-audits/governance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["governance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/security-audits/governance/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["governanceSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/security-audits/governance/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["exportGovernance"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1891,6 +2163,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/qa-feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_9"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/portal-sites/{siteKey}/versions": {
         parameters: {
             query?: never;
@@ -1915,6 +2203,118 @@ export interface paths {
             cookie?: never;
         };
         get: operations["version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/portal-sites/{siteKey}/versions/{versionId}/preview/contents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["previewContents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/portal-sites/{siteKey}/versions/{versionId}/preview/contents/{contentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["previewContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/portal-sites/{siteKey}/versions/{versionId}/preview/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["previewBootstrap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/portal-sites/{siteKey}/theme-workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["workspace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/portal-sites/{siteKey}/theme-workspace/{themeVersionId}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/portal-sites/{siteKey}/theme-workspace/themes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["themes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/portal-sites/{siteKey}/theme-workspace/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["diff"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2035,6 +2435,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/governance/insights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["insights"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/governance/contents/{contentId}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["impact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/contents": {
         parameters: {
             query?: never;
@@ -2058,7 +2490,23 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_9"];
+        get: operations["list_10"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/access/principals/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["impact_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2317,6 +2765,14 @@ export interface components {
             traceId?: string;
         };
         JsonNode: unknown;
+        PortalThemeFilesRequest: {
+            files: {
+                [key: string]: string;
+            };
+            manifest?: components["schemas"]["JsonNode"];
+            /** Format: int32 */
+            expectedLockVersion: number;
+        };
         PortalConfigDraftRequest: {
             config?: components["schemas"]["JsonNode"];
             /** Format: int32 */
@@ -2343,6 +2799,9 @@ export interface components {
             /** Format: int64 */
             parentId: number;
         };
+        GovernancePolicyRequest: {
+            contentSeparationOfDuties?: boolean;
+        };
         PartyContentMetadataRequest: {
             title?: string;
             contentType?: string;
@@ -2354,6 +2813,11 @@ export interface components {
             effectiveDate?: string;
             /** Format: date */
             expiryDate?: string;
+            /** Format: date-time */
+            scheduledOnlineAt?: string;
+            /** Format: date-time */
+            scheduledOfflineAt?: string;
+            scheduleNote?: string;
             validityStatus?: string;
             summary?: string;
             keywords?: string[];
@@ -2393,6 +2857,13 @@ export interface components {
             effectiveDate?: string;
             /** Format: date */
             expiryDate?: string;
+            /** Format: date-time */
+            scheduledOnlineAt?: string;
+            /** Format: date-time */
+            scheduledOfflineAt?: string;
+            scheduleNote?: string;
+            /** Format: int64 */
+            createdBy?: number;
             validityStatus?: string;
             workflowStatus?: string;
             reviewDecision?: string;
@@ -2583,6 +3054,17 @@ export interface components {
             /** Format: int64 */
             timeout?: number | null;
         };
+        QaFeedbackRequest: {
+            rating: string;
+            reason?: string;
+            comment?: string;
+            spaceCode?: string;
+            /** Format: int64 */
+            sessionId?: number;
+            question?: string;
+            answerExcerpt?: string;
+            citationRefs?: string[];
+        };
         FavoriteRequest: {
             favoriteType: string;
             /** Format: int64 */
@@ -2636,6 +3118,27 @@ export interface components {
             signature: string;
             minFrontendVersion?: string;
             manifest: components["schemas"]["JsonNode"];
+        };
+        /** @description 统一响应结果 */
+        ApiResultModelProfileProbeResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ModelProfileProbeResult"];
+            /** Format: int64 */
+            timestamp?: number;
+            traceId?: string;
+        };
+        ModelProfileProbeResult: {
+            profileCode?: string;
+            capability?: string;
+            modelName?: string;
+            success?: boolean;
+            nonStreamingSupported?: boolean;
+            streamingSupported?: boolean;
+            /** Format: int64 */
+            durationMillis?: number;
+            message?: string;
         };
         EvaluationDatasetRequest: {
             name: string;
@@ -2745,6 +3248,42 @@ export interface components {
             versionId: number;
             note?: string;
         };
+        PortalThemeDesignProposalRequest: {
+            /** Format: int32 */
+            expectedLockVersion: number;
+            files: {
+                [key: string]: string;
+            };
+            instruction: string;
+        };
+        /** @description 统一响应结果 */
+        ApiResultPortalThemeDesignProposalResponse: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["PortalThemeDesignProposalResponse"];
+            /** Format: int64 */
+            timestamp?: number;
+            traceId?: string;
+        };
+        PortalThemeDesignProposalResponse: {
+            model?: string;
+            summary?: string;
+            warnings?: string[];
+            files?: {
+                [key: string]: string;
+            };
+            changedFiles?: string[];
+            /** Format: int32 */
+            promptTokens?: number;
+            /** Format: int32 */
+            completionTokens?: number;
+        };
+        PortalThemeImmediatePublishRequest: {
+            /** Format: int64 */
+            themeVersionId: number;
+            syncLocalSource?: boolean;
+        };
         PortalDesignProposalRequest: {
             /** Format: int64 */
             versionId: number;
@@ -2778,6 +3317,12 @@ export interface components {
             promptTokens?: number;
             /** Format: int32 */
             completionTokens?: number;
+        };
+        PortalCodeValidationRequest: {
+            files: {
+                [key: string]: string;
+            };
+            manifest?: components["schemas"]["JsonNode"];
         };
         PortalCodeFilesRequest: {
             version: string;
@@ -2814,6 +3359,11 @@ export interface components {
             effectiveDate?: string;
             /** Format: date */
             expiryDate?: string;
+            /** Format: date-time */
+            scheduledOnlineAt?: string;
+            /** Format: date-time */
+            scheduledOfflineAt?: string;
+            scheduleNote?: string;
             validityStatus: string;
             summary?: string;
             keywords?: string[];
@@ -3136,11 +3686,11 @@ export interface components {
             tokenSource?: string;
             clientId?: string;
             mustChangePassword?: boolean;
+            credentialsNonExpired?: boolean;
+            accountNonExpired?: boolean;
             enabled?: boolean;
             accountNonLocked?: boolean;
             authorities?: components["schemas"]["GrantedAuthority"][];
-            accountNonExpired?: boolean;
-            credentialsNonExpired?: boolean;
         };
         /** @description 统一响应结果 */
         ApiResultPortalDesignCapabilityResponse: {
@@ -3716,6 +4266,33 @@ export interface operations {
             };
         };
     };
+    save: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                siteKey: string;
+                themeVersionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalThemeFilesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
     updateDraft: {
         parameters: {
             query?: never;
@@ -3905,6 +4482,50 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResultVoid"];
+                };
+            };
+        };
+    };
+    policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
+    updatePolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GovernancePolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
                 };
             };
         };
@@ -4141,6 +4762,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SseEmitter"];
+                };
+            };
+        };
+    };
+    record: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QaFeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultLong"];
                 };
             };
         };
@@ -4389,6 +5034,50 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
+    probe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profileCode: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultModelProfileProbeResult"];
+                };
+            };
+        };
+    };
+    activateDefault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profileCode: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultModelProfile"];
                 };
             };
         };
@@ -5039,6 +5728,30 @@ export interface operations {
             };
         };
     };
+    convert: {
+        parameters: {
+            query: {
+                datasetId: number;
+            };
+            header?: never;
+            path: {
+                feedbackId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultLong"];
+                };
+            };
+        };
+    };
     list_4: {
         parameters: {
             query?: never;
@@ -5083,6 +5796,60 @@ export interface operations {
             };
         };
     };
+    previewAsk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                siteKey: string;
+                versionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QARequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultQAResult"];
+                };
+            };
+        };
+    };
+    previewAskStream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                siteKey: string;
+                versionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QARequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SseEmitter"];
+                };
+            };
+        };
+    };
     validate: {
         parameters: {
             query?: never;
@@ -5097,6 +5864,138 @@ export interface operations {
                 "application/json": components["schemas"]["PortalVersionActionRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
+    importTheme: {
+        parameters: {
+            query: {
+                expectedLockVersion: number;
+            };
+            header?: never;
+            path: {
+                siteKey: string;
+                themeVersionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
+    apply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                siteKey: string;
+                themeVersionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
+    propose: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                siteKey: string;
+                themeVersionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalThemeDesignProposalRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultPortalThemeDesignProposalResponse"];
+                };
+            };
+        };
+    };
+    publishImmediately: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                siteKey: string;
+                themeKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalThemeImmediatePublishRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
+    syncLocalSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                siteKey: string;
+                themeKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -5284,6 +6183,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResultVoid"];
+                };
+            };
+        };
+    };
+    validateSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalCodeValidationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
                 };
             };
         };
@@ -5692,6 +6615,9 @@ export interface operations {
                 publishDate: string;
                 effectiveDate?: string;
                 expiryDate?: string;
+                scheduledOnlineAt?: string;
+                scheduledOfflineAt?: string;
+                scheduleNote?: string;
                 validityStatus: string;
                 summary?: string;
                 keywords?: string[];
@@ -5925,6 +6851,86 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResultPageResultMapStringObject"];
+                };
+            };
+        };
+    };
+    governance: {
+        parameters: {
+            query?: {
+                pageNum?: number;
+                pageSize?: number;
+                username?: string;
+                resource?: string;
+                eventType?: string;
+                action?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultPageResultMapStringObject"];
+                };
+            };
+        };
+    };
+    governanceSummary: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
+    exportGovernance: {
+        parameters: {
+            query?: {
+                pageNum?: number;
+                pageSize?: number;
+                username?: string;
+                resource?: string;
+                eventType?: string;
+                action?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
                 };
             };
         };
@@ -6642,6 +7648,28 @@ export interface operations {
             };
         };
     };
+    list_9: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultListMapStringObject"];
+                };
+            };
+        };
+    };
     versions_1: {
         parameters: {
             query?: never;
@@ -6671,6 +7699,186 @@ export interface operations {
             path: {
                 siteKey: string;
                 versionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
+    previewContents: {
+        parameters: {
+            query?: {
+                keyword?: string;
+                contentType?: string;
+                topicCode?: string;
+                issuingAuthority?: string;
+                validityStatus?: string;
+                spaceCode?: string;
+                publishDateFrom?: string;
+                publishDateTo?: string;
+                includeHistorical?: boolean;
+                pageNum?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                siteKey: string;
+                versionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
+    previewContent: {
+        parameters: {
+            query?: {
+                location?: string;
+            };
+            header?: never;
+            path: {
+                siteKey: string;
+                versionId: number;
+                contentId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultPartyContentView"];
+                };
+            };
+        };
+    };
+    previewBootstrap: {
+        parameters: {
+            query?: {
+                page?: string;
+            };
+            header?: never;
+            path: {
+                siteKey: string;
+                versionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
+    workspace: {
+        parameters: {
+            query?: {
+                themeKey?: string;
+            };
+            header?: never;
+            path: {
+                siteKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
+    export: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                siteKey: string;
+                themeVersionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    themes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                siteKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultListMapStringObject"];
+                };
+            };
+        };
+    };
+    diff: {
+        parameters: {
+            query: {
+                fromVersionId: number;
+                toVersionId: number;
+            };
+            header?: never;
+            path: {
+                siteKey: string;
             };
             cookie?: never;
         };
@@ -6843,6 +8051,48 @@ export interface operations {
             };
         };
     };
+    insights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
+    impact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contentId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
+                };
+            };
+        };
+    };
     page_8: {
         parameters: {
             query?: {
@@ -6871,7 +8121,7 @@ export interface operations {
             };
         };
     };
-    list_9: {
+    list_10: {
         parameters: {
             query: {
                 type: string;
@@ -6890,6 +8140,29 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResultListMapStringObject"];
+                };
+            };
+        };
+    };
+    impact_1: {
+        parameters: {
+            query: {
+                type: string;
+                value: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResultMapStringObject"];
                 };
             };
         };

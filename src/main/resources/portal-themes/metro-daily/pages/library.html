@@ -1,0 +1,14 @@
+<header class="page-title">
+  <h1>资讯中心</h1>
+  <p class="page-sub">全部收录资讯，按收录时间倒序。</p>
+</header>
+<ul class="news-list page-list">
+  {% for item in recent %}
+  <li>
+    <button type="button" data-kma-content="{{ item.contentId }}">
+      <span class="news-title"><em>[{{ item.contentType }}]</em> {{ item.title }}</span>
+      <time>{{ item.publishDate }}</time>
+    </button>
+  </li>
+  {% endfor %}
+</ul>

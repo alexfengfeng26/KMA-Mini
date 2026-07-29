@@ -66,11 +66,13 @@ knowledge:
       api-key: ${KMA_LOCAL_EMBEDDING_API_KEY:}
       max-retry: ${KMA_LOCAL_EMBEDDING_MAX_RETRY:3}
   llm:
-    default-provider: ${KMA_LLM_PROVIDER:ollama}
-    base-url: ${KMA_LLM_BASE_URL:https://api.deepseek.com/v1}
-    model: ${KMA_LLM_MODEL:deepseek-chat}
+    # New QA requests resolve the database default LLM Profile first (V26 seeds
+    # deepseek-v4-flash). These values are legacy fallback-only.
+    default-provider: ${KMA_LLM_PROVIDER:deepseek}
+    base-url: ${KMA_LLM_BASE_URL:https://api.deepseek.com}
+    model: ${KMA_LLM_MODEL:deepseek-v4-flash}
     max-retry: ${KMA_LLM_MAX_RETRY:3}
-    api-key: ${KMA_LLM_API_KEY:}
+    api-key: ${KMA_LLM_API_KEY:${KMA_DEEPSEEK_API_KEY:}}
     fallback-providers: ${KMA_LLM_FALLBACK_PROVIDERS:}
     local:
       base-url: ${KMA_LOCAL_LLM_BASE_URL:http://localhost:11434/v1}

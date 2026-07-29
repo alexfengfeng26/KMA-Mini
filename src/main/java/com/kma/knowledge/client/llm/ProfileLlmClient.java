@@ -34,6 +34,7 @@ final class ProfileLlmClient implements LlmClient {
     }
 
     @Override public String provider() { return profile.getProfileCode(); }
+    @Override public String model() { return profile.getModelName(); }
 
     @Override
     public LlmChatResponse chat(LlmChatRequest request) {
@@ -56,6 +57,9 @@ final class ProfileLlmClient implements LlmClient {
     @Override
     public void streamChat(LlmChatRequest request, Consumer<String> onChunk) {
         request(true, request).exchange((req, response) -> {
+            if (response.getStatusCode().isError()) {
+                throw new KmaException(response.getStatusCode().value(), "LLM 流式接口返回 HTTP " + response.getStatusCode().value());
+            }
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.getBody(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {

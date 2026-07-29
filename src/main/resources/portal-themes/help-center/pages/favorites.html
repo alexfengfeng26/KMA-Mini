@@ -1,0 +1,16 @@
+<header class="page-title">
+  <p class="kicker">Bookmarks</p>
+  <h1>我的收藏</h1>
+  <p class="page-sub">收藏过的文档，随时回看。</p>
+</header>
+<div class="doc-rows">
+  {% for fav in favorites %}
+  <button type="button" class="doc-row" data-kma-content="{{ fav.docId }}">
+    <span class="doc-row-main">
+      <strong>{{ fav.title }}</strong>
+      <em>{{ fav.issuingAuthority }} · 收藏于 {{ fav.lastReadAt }}</em>
+    </span>
+    <i>→</i>
+  </button>
+  {% endfor %}
+</div>

@@ -108,7 +108,7 @@ window.addEventListener('load', () => dispatchEvent(new Event('portal-sdk-ready'
 </scr` + `ipt>`
 
 const themeKeys = process.argv.slice(2)
-const targets = themeKeys.length ? themeKeys : ['governance-blue', 'heritage-red', 'ink-night']
+const targets = themeKeys.length ? themeKeys : ['governance-blue', 'heritage-red', 'ink-night', 'help-center', 'metro-daily']
 
 for (const themeKey of targets) {
   const themeDir = join(themesRoot, themeKey)
