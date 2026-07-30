@@ -515,107 +515,123 @@ onBeforeUnmount(() => editorInstance?.dispose())
 <template>
   <div class="theme-studio" v-loading="loading">
     <header class="studio-toolbar">
-      <el-button text class="return-console" @click="returnToConsole">← 返回后台管理</el-button>
-      <div class="studio-title">
-        <strong>Portal Theme V4</strong>
-        <span>全站主题工作台</span>
-        <el-tag :type="dirty ? 'warning' : 'success'" size="small">
-          {{ dirty ? '未保存' : `V${workspace?.version.versionNo || '-'}` }}
-        </el-tag>
+      <div class="toolbar-group toolbar-group--identity">
+        <el-button text class="return-console" @click="returnToConsole">← 返回后台管理</el-button>
+        <div class="studio-title">
+          <span>全站主题工作台</span>
+          <el-tag :type="dirty ? 'warning' : 'success'" size="small">
+            {{ dirty ? '未保存' : `V${workspace?.version.versionNo || '-'}` }}
+          </el-tag>
+        </div>
       </div>
-      <el-select v-model="siteKey" aria-label="站点" style="width: 150px">
-        <el-option v-for="site in sites" :key="site.siteKey" :label="site.name" :value="site.siteKey" />
-      </el-select>
-      <el-select v-model="routePage" aria-label="预览路由" style="width: 130px">
-        <el-option v-for="[key, label] in pageRoutes" :key="key" :label="label" :value="key" />
-      </el-select>
-      <el-button @click="previewSaved">真实预览</el-button>
-      <el-button @click="workspace && exportPortalTheme(siteKey, workspace.version.themeVersionId)">
-        导出 ZIP
-      </el-button>
-      <el-button @click="zipInput?.click()">导入 ZIP</el-button>
-      <input ref="zipInput" class="visually-hidden" type="file" accept=".zip" @change="importZip" />
-      <el-button type="warning" plain @click="aiOpen = true">AI 设计整站</el-button>
-      <el-button v-if="aiUndoFiles" @click="undoAiProposal">撤销 AI</el-button>
-      <el-button :loading="saving" @click="save">保存草稿</el-button>
-      <el-button
-        v-if="canDirectPublish"
-        type="primary"
-        :loading="publishing"
-        :disabled="!workspace"
-        @click="publishImmediately"
-      >
-        {{ localSourceChanged && !dirty ? '同步并立即发布' : '立即发布' }}
-      </el-button>
-      <el-button v-else-if="portalStatus === 'draft'" type="primary" @click="act('submit')">
-        保存并送审
-      </el-button>
-      <el-button
-        v-else-if="portalStatus === 'reviewing' && !workspace?.portalVersion.reviewedAt"
-        type="primary"
-        @click="act('approve')"
-      >
-        通过审核
-      </el-button>
-      <el-button
-        v-else-if="portalStatus === 'reviewing' && workspace?.portalVersion.reviewedAt"
-        type="primary"
-        @click="act('publish')"
-      >
-        发布门户
-      </el-button>
-    </header>
 
-    <section class="theme-switcher" aria-label="主题快速选择">
-      <span class="theme-switcher__label">当前主题</span>
-      <el-select
-        :model-value="selectedThemeKey"
-        aria-label="当前主题"
-        class="theme-switcher__select"
-        @update:model-value="switchTheme"
-      >
-        <el-option
-          v-for="theme in themeCatalog"
-          :key="theme.themeId"
-          :label="theme.displayName"
-          :value="theme.themeKey"
-        >
-          <div class="theme-option">
-            <span class="theme-swatch" :class="`theme-swatch--${theme.themeKey}`" />
-            <span class="theme-option__copy"
-              ><strong>{{ theme.displayName }}</strong
-              ><small
-                >V{{ theme.versionNo }} · {{ theme.scanStatus === 'passed' ? '扫描通过' : '待处理' }}</small
-              ></span
+      <div class="toolbar-group toolbar-group--context">
+        <el-select v-model="siteKey" size="small" aria-label="站点" style="width: 140px">
+          <el-option v-for="site in sites" :key="site.siteKey" :label="site.name" :value="site.siteKey" />
+        </el-select>
+        <el-select v-model="routePage" size="small" aria-label="预览路由" style="width: 120px">
+          <el-option v-for="[key, label] in pageRoutes" :key="key" :label="label" :value="key" />
+        </el-select>
+        <el-tooltip :content="selectedTheme?.description || '选择一个主题进入文件工作区'" placement="bottom">
+          <el-select
+            :model-value="selectedThemeKey"
+            size="small"
+            aria-label="当前主题"
+            style="width: 160px"
+            @update:model-value="switchTheme"
+          >
+            <el-option
+              v-for="theme in themeCatalog"
+              :key="theme.themeId"
+              :label="theme.displayName"
+              :value="theme.themeKey"
             >
-            <el-tag v-if="theme.published" size="small" type="success">当前发布</el-tag>
-            <el-tag v-else-if="theme.recommended" size="small" type="warning">推荐</el-tag>
-          </div>
-        </el-option>
-      </el-select>
-      <span class="theme-switcher__meta" :title="selectedTheme?.description">
-        {{ selectedTheme?.description || '选择一个主题进入文件工作区' }}
-      </span>
-      <el-tag v-if="localSourceChanged" size="small" type="warning">本地有未发布变更</el-tag>
-      <el-tag v-else-if="selectedTheme?.localSourceAvailable" size="small" type="success"
-        >本地源码已同步</el-tag
-      >
-      <el-button size="small" :loading="refreshingThemeStatus" @click="refreshThemeStatus">
-        刷新本地状态
-      </el-button>
-      <template v-if="!canDirectPublish">
-        <el-tooltip
-          :content="selectedTheme?.localSourceMessage || '从仓库资源目录创建新草稿，不覆盖已有版本'"
-        >
-          <el-button size="small" :disabled="!selectedTheme?.localSourceAvailable" @click="syncLocalSource">
-            同步本地源码
-          </el-button>
+              <div class="theme-option">
+                <span class="theme-swatch" :class="`theme-swatch--${theme.themeKey}`" />
+                <span class="theme-option__copy"
+                  ><strong>{{ theme.displayName }}</strong
+                  ><small
+                    >V{{ theme.versionNo }} · {{ theme.scanStatus === 'passed' ? '扫描通过' : '待处理' }}</small
+                  ></span
+                >
+                <el-tag v-if="theme.published" size="small" type="success">当前发布</el-tag>
+                <el-tag v-else-if="theme.recommended" size="small" type="warning">推荐</el-tag>
+              </div>
+            </el-option>
+          </el-select>
         </el-tooltip>
-        <el-button size="small" type="primary" plain :disabled="!workspace" @click="applyTheme">
-          应用到门户草稿
+        <el-tag v-if="localSourceChanged" size="small" type="warning">本地有未发布变更</el-tag>
+        <el-tag v-else-if="selectedTheme?.localSourceAvailable" size="small" type="success"
+          >本地源码已同步</el-tag
+        >
+      </div>
+
+      <div class="toolbar-group toolbar-group--actions">
+        <el-button type="warning" plain @click="aiOpen = true">AI 设计整站</el-button>
+        <el-button v-if="aiUndoFiles" @click="undoAiProposal">撤销 AI</el-button>
+        <el-button :loading="saving" @click="save">保存草稿</el-button>
+        <el-button
+          v-if="canDirectPublish"
+          type="primary"
+          :loading="publishing"
+          :disabled="!workspace"
+          @click="publishImmediately"
+        >
+          {{ localSourceChanged && !dirty ? '同步并立即发布' : '立即发布' }}
         </el-button>
-      </template>
-    </section>
+        <el-button v-else-if="portalStatus === 'draft'" type="primary" @click="act('submit')">
+          保存并送审
+        </el-button>
+        <el-button
+          v-else-if="portalStatus === 'reviewing' && !workspace?.portalVersion.reviewedAt"
+          type="primary"
+          @click="act('approve')"
+        >
+          通过审核
+        </el-button>
+        <el-button
+          v-else-if="portalStatus === 'reviewing' && workspace?.portalVersion.reviewedAt"
+          type="primary"
+          @click="act('publish')"
+        >
+          发布门户
+        </el-button>
+
+        <el-dropdown>
+          <el-button size="small"> 文件 ▼ </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item @click="workspace && exportPortalTheme(siteKey, workspace.version.themeVersionId)">
+                导出 ZIP
+              </el-dropdown-item>
+              <el-dropdown-item @click="zipInput?.click()"> 导入 ZIP </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <input ref="zipInput" class="visually-hidden" type="file" accept=".zip" @change="importZip" />
+
+        <el-dropdown>
+          <el-button size="small"> 操作 ▼ </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item @click="previewSaved"> 真实预览 </el-dropdown-item>
+              <el-dropdown-item :disabled="refreshingThemeStatus" @click="refreshThemeStatus">
+                刷新本地状态
+              </el-dropdown-item>
+              <template v-if="!canDirectPublish">
+                <el-dropdown-item
+                  :disabled="!selectedTheme?.localSourceAvailable"
+                  @click="syncLocalSource"
+                >
+                  同步本地源码
+                </el-dropdown-item>
+                <el-dropdown-item :disabled="!workspace" @click="applyTheme"> 应用到门户草稿 </el-dropdown-item>
+              </template>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
+    </header>
 
     <section class="studio-grid">
       <aside class="file-panel">
@@ -723,7 +739,7 @@ onBeforeUnmount(() => editorInstance?.dispose())
   z-index: 80;
   inset: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) 44px;
+  grid-template-rows: auto minmax(0, 1fr) 44px;
   color: #d8e2ef;
   background: #0d1420;
 }
@@ -739,45 +755,35 @@ onBeforeUnmount(() => editorInstance?.dispose())
 }
 
 .studio-toolbar {
-  min-height: 58px;
-  flex-wrap: wrap;
-  padding: 0 16px;
+  min-height: 54px;
+  padding: 8px 16px;
   border-bottom: 1px solid #283448;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.toolbar-group--identity {
+  flex: 0 0 auto;
+  margin-right: auto;
+}
+
+.toolbar-group--context {
+  flex: 0 0 auto;
+}
+
+.toolbar-group--actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
 }
 
 .return-console {
   flex: 0 0 auto;
   color: #a8c7ef;
-}
-
-.theme-switcher {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  min-height: 46px;
-  padding: 6px 16px;
-  border-bottom: 1px solid #283448;
-  background: #101925;
-}
-
-.theme-switcher__label {
-  color: #c7d4e4;
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.theme-switcher__select {
-  width: 224px;
-}
-
-.theme-switcher__meta {
-  min-width: 0;
-  overflow: hidden;
-  color: #8290a6;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .theme-option {
@@ -825,24 +831,27 @@ onBeforeUnmount(() => editorInstance?.dispose())
   background: linear-gradient(135deg, #1e50a2, #c00);
 }
 
-@media (width <= 980px) {
-  .theme-switcher {
+@media (width <= 1260px) {
+  .studio-toolbar {
     flex-wrap: wrap;
+    row-gap: 8px;
   }
 
-  .theme-switcher__meta {
-    flex: 1 1 260px;
+  .toolbar-group--identity {
+    flex: 1 1 100%;
+    margin-right: 0;
+  }
+
+  .toolbar-group--context,
+  .toolbar-group--actions {
+    flex: 1 1 auto;
   }
 }
 
-@media (width <= 640px) {
-  .theme-switcher__select {
-    width: calc(100% - 76px);
-  }
-
-  .theme-switcher__meta {
-    order: 3;
-    flex-basis: 100%;
+@media (width <= 820px) {
+  .toolbar-group--context,
+  .toolbar-group--actions {
+    flex-wrap: wrap;
   }
 }
 
@@ -1023,7 +1032,7 @@ onBeforeUnmount(() => editorInstance?.dispose())
   .preview-panel {
     position: absolute;
     z-index: 2;
-    inset: 132px 0 44px 55%;
+    inset: 96px 0 44px 55%;
   }
 }
 </style>

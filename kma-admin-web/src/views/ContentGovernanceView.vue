@@ -17,6 +17,7 @@ import {
 import { authorizedJson, errorMessage } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import AppPagination from '../components/AppPagination.vue'
+import PageHeader from '../components/PageHeader.vue'
 import PageState from '../components/PageState.vue'
 import { PARTY_CONTENT_CATEGORIES, categoryLabel } from '../domain/partyKnowledge'
 import { useUnsavedChanges } from '../composables/useUnsavedChanges'
@@ -405,28 +406,27 @@ watch(
 </script>
 <template>
   <section class="panel">
-    <div class="toolbar">
-      <div>
-        <span class="eyebrow">PARTY CONTENT GOVERNANCE</span>
-        <h2>{{ reviewMode ? '审核中心' : publicationMode ? '发布管理' : '党建内容库' }}</h2>
-        <p class="muted">
-          {{
-            reviewMode
-              ? '核对正文、元数据和版本后决定通过或驳回。'
-              : publicationMode
-                ? '管理审核通过内容的发布、下线、恢复与新版本切换。'
-                : '草稿、审核、发布与版本切换使用同一条可审计流程。'
-          }}
-        </p>
-      </div>
-      <el-button
-        v-if="!reviewMode && !publicationMode"
-        v-permission="'content:create'"
-        type="primary"
-        @click="openCreate"
-        >新增内容</el-button
-      >
-    </div>
+    <PageHeader
+      eyebrow="PARTY CONTENT GOVERNANCE"
+      :title="reviewMode ? '审核中心' : publicationMode ? '发布管理' : '党建内容库'"
+      :description="
+        reviewMode
+          ? '核对正文、元数据和版本后决定通过或驳回。'
+          : publicationMode
+            ? '管理审核通过内容的发布、下线、恢复与新版本切换。'
+            : '草稿、审核、发布与版本切换使用同一条可审计流程。'
+      "
+    >
+      <template #actions>
+        <el-button
+          v-if="!reviewMode && !publicationMode"
+          v-permission="'content:create'"
+          type="primary"
+          @click="openCreate"
+          >新增内容</el-button
+        >
+      </template>
+    </PageHeader>
     <div v-if="Object.keys(governanceInsights).length" class="governance-signals">
       <div
         v-for="(label, key) in {
@@ -714,12 +714,16 @@ watch(
   ></el-dialog>
 </template>
 <style scoped>
+.panel :deep(.page-header) {
+  margin-bottom: 8px;
+}
+
 .governance-signals {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
-  margin: 0 0 16px;
+  margin: 0 0 12px;
 }
 
 .signal {
