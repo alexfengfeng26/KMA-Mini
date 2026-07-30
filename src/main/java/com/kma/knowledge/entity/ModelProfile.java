@@ -1,8 +1,10 @@
 package com.kma.knowledge.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.kma.knowledge.config.JsonbStringTypeHandler;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -21,6 +23,7 @@ public class ModelProfile {
     private Integer dimension;
     private Integer timeoutSeconds;
     private String secretAlias;
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
     private String fallbackProfileCodes;
     private Boolean enabled;
     private Boolean defaultProfile;

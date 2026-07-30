@@ -1,8 +1,10 @@
 package com.kma.knowledge.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.kma.knowledge.config.JsonbStringTypeHandler;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -15,7 +17,7 @@ import java.time.LocalDateTime;
  * @date 2026/07/02
  */
 @Data
-@TableName("knowledge_feed_task")
+@TableName(value = "knowledge_feed_task", autoResultMap = true)
 public class KnowledgeFeedTask implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -69,8 +71,9 @@ public class KnowledgeFeedTask implements Serializable {
     private String errorMessage;
 
     /**
-     * JSON 元数据，保留原始事件信息
+     * JSONB 元数据，保留原始事件信息
      */
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
     private String meta;
 
     private LocalDateTime createTime;

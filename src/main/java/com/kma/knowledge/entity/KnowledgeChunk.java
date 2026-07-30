@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.kma.knowledge.config.JsonbStringTypeHandler;
 import com.kma.knowledge.config.PgvectorTypeHandler;
 import com.kma.knowledge.config.TsvectorTypeHandler;
 import lombok.Data;
@@ -19,7 +20,7 @@ import java.time.LocalDate;
  * @date 2026/06/30
  */
 @Data
-@TableName("knowledge_chunk")
+@TableName(value = "knowledge_chunk", autoResultMap = true)
 public class KnowledgeChunk implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -68,6 +69,7 @@ public class KnowledgeChunk implements Serializable {
     /**
      * JSONB：分块级元数据
      */
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
     private String meta;
 
     private LocalDateTime createTime;
