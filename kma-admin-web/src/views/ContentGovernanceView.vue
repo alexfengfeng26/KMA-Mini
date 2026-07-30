@@ -19,6 +19,7 @@ import { useAuthStore } from '../stores/auth'
 import AppPagination from '../components/AppPagination.vue'
 import PageHeader from '../components/PageHeader.vue'
 import PageState from '../components/PageState.vue'
+import SpaceSelect from '../components/SpaceSelect.vue'
 import { PARTY_CONTENT_CATEGORIES, categoryLabel } from '../domain/partyKnowledge'
 import { useUnsavedChanges } from '../composables/useUnsavedChanges'
 
@@ -475,7 +476,7 @@ watch(
         ><el-option label="草稿" value="draft" /><el-option label="审核中" value="reviewing" /><el-option
           label="已发布"
           value="published" /></el-select
-      ><el-input v-model="filters.spaceCode" placeholder="空间编码" clearable /><el-button @click="load(true)"
+      ><SpaceSelect v-model="filters.spaceCode" placeholder="空间编码" clearable /><el-button @click="load(true)"
         >查询</el-button
       >
     </div>
@@ -595,7 +596,7 @@ watch(
           ><el-form-item label="标题"><el-input v-model="form.title" /></el-form-item></el-col
         ><el-col :span="12"
           ><el-form-item label="知识空间"
-            ><el-input v-model="form.spaceCode" :disabled="Boolean(editingId)" /></el-form-item></el-col
+            ><SpaceSelect v-model="form.spaceCode" :disabled="Boolean(editingId)" /></el-form-item></el-col
         ><el-col :span="8"
           ><el-form-item label="一级分类"
             ><el-select v-model="form.contentType"

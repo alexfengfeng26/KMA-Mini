@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { api, asList, errorMessage, unwrap } from '../api/client'
 import AppPagination from '../components/AppPagination.vue'
 import PageState from '../components/PageState.vue'
+import SpaceSelect from '../components/SpaceSelect.vue'
 import { readServerPage, useClientPagination } from '../components/listPagination'
 import type { components } from '../api/generated/schema'
 import { useMutationAction } from '../composables/useMutationAction'
@@ -205,7 +206,7 @@ onMounted(load)
       <el-button v-permission="'document:ingest'" type="primary" @click="openIngest">添加文档</el-button>
     </div>
     <div class="filter-bar">
-      <el-input v-model="filters.title" placeholder="文档标题" clearable /><el-input
+      <el-input v-model="filters.title" placeholder="文档标题" clearable /><SpaceSelect
         v-model="filters.spaceCode"
         placeholder="空间编码"
         clearable

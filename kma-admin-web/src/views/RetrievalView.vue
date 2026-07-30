@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { api, unwrap } from '../api/client'
 import AppPagination from '../components/AppPagination.vue'
 import { useClientPagination } from '../components/listPagination'
+import SpaceSelect from '../components/SpaceSelect.vue'
 import type { components } from '../api/generated/schema'
 
 type RetrieveDebugResult = components['schemas']['RetrieveDebugResult']
@@ -34,7 +35,7 @@ async function run() {
     <el-form class="retrieval-form" label-position="top"
       ><el-row :gutter="16"
         ><el-col :xs="24" :sm="6"
-          ><el-form-item label="空间编码"><el-input v-model="form.spaceCode" /></el-form-item></el-col
+          ><el-form-item label="知识空间"><SpaceSelect v-model="form.spaceCode" /></el-form-item></el-col
         ><el-col :xs="24" :sm="14"
           ><el-form-item label="检索问题"
             ><el-input v-model="form.query" @keyup.enter="run" /></el-form-item></el-col

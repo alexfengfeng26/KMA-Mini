@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { api, asList, errorMessage, unwrap } from '../api/client'
 import { streamQa, type QaStreamEvent } from '../api/sse'
 import PageState from '../components/PageState.vue'
+import SpaceSelect from '../components/SpaceSelect.vue'
 import type { components } from '../api/generated/schema'
 import { useAuthStore } from '../stores/auth'
 
@@ -209,7 +210,7 @@ onBeforeUnmount(() => controller.value?.abort())
           @keydown.ctrl.enter="ask"
         />
         <div class="filter-bar spaced-top">
-          <el-input v-model="form.spaceCode" placeholder="空间编码" @change="loadSessions" /><el-input-number
+          <SpaceSelect v-model="form.spaceCode" @update:model-value="loadSessions" /><el-input-number
             v-model="form.topK"
             :min="1"
             :max="100"

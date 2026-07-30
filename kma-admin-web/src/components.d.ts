@@ -60,6 +60,7 @@ declare module 'vue' {
     PageState: typeof import('./components/PageState.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SpaceSelect: typeof import('./components/SpaceSelect.vue')['default']
     StatusTag: typeof import('./components/StatusTag.vue')['default']
     TraceableError: typeof import('./components/TraceableError.vue')['default']
   }

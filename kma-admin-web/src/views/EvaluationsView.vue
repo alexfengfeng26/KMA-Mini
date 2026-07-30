@@ -4,6 +4,7 @@ import { api, unwrap, asList, asRecord, errorMessage } from '../api/client'
 import type { components } from '../api/generated/schema'
 import AppPagination from '../components/AppPagination.vue'
 import PageState from '../components/PageState.vue'
+import SpaceSelect from '../components/SpaceSelect.vue'
 import { getAuthorizedPage } from '../api/page'
 import { useMutationAction } from '../composables/useMutationAction'
 
@@ -181,7 +182,7 @@ onMounted(loadDatasets)
               :label="`${item.name} · ${item.case_count} 例`"
               :value="item.evaluation_dataset_id" /></el-select></el-form-item
         ><el-form-item label="新建名称"><el-input v-model="createForm.name" /></el-form-item
-        ><el-form-item label="空间"><el-input v-model="createForm.spaceCode" /></el-form-item
+        ><el-form-item label="空间"><SpaceSelect v-model="createForm.spaceCode" /></el-form-item
         ><el-button
           v-permission="'evaluation:create'"
           :loading="mutation.pending.value"

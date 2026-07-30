@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { api, asRecord, errorMessage, unwrap } from '../api/client'
 import AppPagination from '../components/AppPagination.vue'
 import PageState from '../components/PageState.vue'
+import SpaceSelect from '../components/SpaceSelect.vue'
 import { readServerPage } from '../components/listPagination'
 import { useMutationAction } from '../composables/useMutationAction'
 import { taskStatusMeta } from '../domain/systemCatalog'
@@ -108,7 +109,7 @@ onMounted(load)
           value="success" /><el-option label="失败" value="failed" /><el-option
           label="死信"
           value="dead" /></el-select
-      ><el-input v-model="filters.spaceCode" placeholder="空间编码" clearable /><el-input
+      ><SpaceSelect v-model="filters.spaceCode" placeholder="空间编码" clearable /><el-input
         v-model="filters.sourceType"
         placeholder="来源类型"
         clearable
