@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import {
   applyContentAction,
   createFileContent,
@@ -46,6 +47,7 @@ interface ContentForm {
 }
 
 const route = useRoute(),
+  router = useRouter(),
   auth = useAuthStore(),
   rows = ref<PartyContent[]>([]),
   topics = ref<PortalTopic[]>([]),
@@ -68,6 +70,8 @@ const route = useRoute(),
   contentImpact = ref<Record<string, number>>({})
 const versionPage = ref(1),
   versionPageSize = ref(10)
+const selectedRows = ref<PartyContent[]>([])
+const tableRef = ref<TableInstance | null>(null)
 const pagedVersions = computed(
   () =>
     detail.value?.versions?.slice(
@@ -110,6 +114,25 @@ const hasGovernanceSignals = computed(
     Object.keys(governanceInsights.value).length > 0 &&
     Object.values(governanceInsights.value).some((v) => (v as number) > 0),
 )
+const signalDefinitions: { key: string; label: string; severity: 'info' | 'warning' | 'danger' }[] = [
+  { key: 'scheduledOnline', label: '待上线', severity: 'info' },
+  { key: 'scheduledOffline', label: '待下线', severity: 'info' },
+  { key: 'expiringSoon', label: '30 天内到期', severity: 'warning' },
+  { key: 'parsePending', label: '待处理解析', severity: 'warning' },
+  { key: 'withoutTopics', label: '未归专题', severity: 'warning' },
+  { key: 'duplicateReferences', label: '疑似重复文号', severity: 'danger' },
+  { key: 'unhelpfulAnswers', label: '低评价问答', severity: 'warning' },
+  { key: 'searchWithoutResult', label: '无结果搜索', severity: 'info' },
+]
+const signalList = computed(() =>
+  signalDefinitions
+    .map((s, index) => ({ ...s, index, value: Number(governanceInsights.value[s.key] || 0) }))
+    .filter((s) => s.value > 0)
+    .sort((a, b) => b.value - a.value || a.index - b.index),
+)
+function signalClass(severity: string) {
+  return `signal--${severity}`
+}
 const cleanFormSnapshot = ref('')
 const currentFormSnapshot = computed(() =>
   JSON.stringify({
@@ -400,6 +423,108 @@ function status(row: PartyContent) {
     return row.reviewDecision === 'approved' ? '审核通过，待发布' : '待审核'
   return row.online ? '已发布' : '已下线'
 }
+function statusTagType(row: PartyContent) {
+  if (row.workflowStatus === 'draft') return row.reviewDecision === 'rejected' ? 'danger' : 'info'
+  if (row.workflowStatus === 'reviewing') return row.reviewDecision === 'approved' ? 'warning' : 'warning'
+  return row.online ? 'success' : 'info'
+}
+function workflowStepIndex(row: PartyContent): number {
+  if (row.workflowStatus === 'draft') return 0
+  if (row.workflowStatus === 'reviewing') return row.reviewDecision === 'approved' ? 2 : 1
+  return row.online ? 3 : 3
+}
+interface ActionItem {
+  name: 'submit' | 'approve' | 'reject' | 'publish' | 'offline' | 'restore' | 'edit'
+  label: string
+  disabled: boolean
+}
+function availableActions(row: PartyContent): ActionItem[] {
+  const actions: ActionItem[] = []
+  const busy = actionPendingId.value === row.contentId || Boolean(actionPendingId.value)
+  if (row.workflowStatus === 'draft') {
+    if (can('content:update')) actions.push({ name: 'edit', label: '编辑', disabled: busy })
+    if (can('content:submit'))
+      actions.push({
+        name: 'submit',
+        label: '提交审核',
+        disabled: row.parseStatus !== 'completed' || busy,
+      })
+  } else if (
+    row.workflowStatus === 'reviewing' &&
+    row.reviewDecision !== 'approved' &&
+    can('content:review')
+  ) {
+    actions.push({ name: 'approve', label: '通过', disabled: busy })
+    actions.push({ name: 'reject', label: '驳回', disabled: busy })
+  } else if (
+    row.reviewDecision === 'approved' &&
+    row.workflowStatus !== 'published' &&
+    can('content:publish')
+  ) {
+    actions.push({ name: 'publish', label: '发布', disabled: busy })
+  } else if (row.workflowStatus === 'published' && row.online && can('content:publish')) {
+    actions.push({ name: 'offline', label: '下线', disabled: busy })
+  } else if (row.workflowStatus === 'published' && !row.online && can('content:publish')) {
+    actions.push({ name: 'restore', label: '恢复上线', disabled: busy })
+  }
+  return actions
+}
+function handleActionCommand(
+  command: 'submit' | 'approve' | 'reject' | 'publish' | 'offline' | 'restore' | 'edit',
+  row: PartyContent,
+) {
+  if (command === 'edit') return openEdit(row)
+  action(row, command)
+}
+function selectionChange(rows: PartyContent[]) {
+  selectedRows.value = rows
+}
+function clearSelection() {
+  selectedRows.value = []
+  tableRef.value?.clearSelection()
+}
+function eligibleForBatch(actionName: 'submit' | 'approve' | 'reject' | 'publish' | 'offline' | 'restore') {
+  return selectedRows.value.filter((row) => {
+    if (actionName === 'submit') return row.workflowStatus === 'draft' && row.parseStatus === 'completed'
+    if (actionName === 'approve')
+      return row.workflowStatus === 'reviewing' && row.reviewDecision !== 'approved'
+    if (actionName === 'reject')
+      return row.workflowStatus === 'reviewing' && row.reviewDecision !== 'approved'
+    if (actionName === 'publish')
+      return row.reviewDecision === 'approved' && row.workflowStatus !== 'published'
+    if (actionName === 'offline') return row.workflowStatus === 'published' && row.online
+    if (actionName === 'restore') return row.workflowStatus === 'published' && !row.online
+    return false
+  })
+}
+async function batchAction(actionName: 'submit' | 'approve' | 'reject' | 'publish' | 'offline' | 'restore') {
+  const targets = eligibleForBatch(actionName)
+  if (!targets.length) {
+    ElMessage.warning('没有符合批量操作条件的内容')
+    return
+  }
+  const label = actionLabel(actionName)
+  try {
+    await ElMessageBox.confirm(`确认对选中的 ${targets.length} 项内容执行“${label}”？`, '批量操作确认', {
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  let success = 0
+  let failed = 0
+  for (const row of targets) {
+    try {
+      await applyContentAction(row.contentId!, actionName)
+      success++
+    } catch {
+      failed++
+    }
+  }
+  ElMessage.success(`批量${label}完成：成功 ${success} 条${failed ? `，失败 ${failed} 条` : ''}`)
+  clearSelection()
+  await load()
+}
 onMounted(async () => {
   try {
     topics.value = await getAdminTopics()
@@ -427,6 +552,29 @@ watch(
       "
     >
       <template #actions>
+        <div v-if="hasGovernanceSignals" class="governance-signals governance-signals--inline">
+          <div
+            v-for="s in signalList"
+            :key="s.key"
+            class="signal"
+            :class="[signalClass(s.severity), { 'signal--zero': s.value === 0 }]"
+          >
+            <span>{{ s.label }}</span><strong>{{ s.value }}</strong>
+          </div>
+          <div class="signal signal--toggle">
+            <el-tooltip content="启用后，内容提交者不能审核或发布自己创建的内容。管理员仍可调整此策略。">
+              <el-switch
+                v-if="can('content:publish')"
+                v-model="governancePolicy.contentSeparationOfDuties"
+                inline-prompt
+                active-text="职责分离"
+                inactive-text="可自审"
+                :loading="policySaving"
+                @change="saveSeparationOfDuties(Boolean($event))"
+              />
+            </el-tooltip>
+          </div>
+        </div>
         <el-button
           v-if="!reviewMode && !publicationMode"
           v-permission="'content:create'"
@@ -436,37 +584,6 @@ watch(
         >
       </template>
     </PageHeader>
-    <div v-if="hasGovernanceSignals" class="governance-signals">
-      <div
-        v-for="(label, key) in {
-          scheduledOnline: '待上线',
-          scheduledOffline: '待下线',
-          expiringSoon: '30 天内到期',
-          parsePending: '待处理解析',
-          withoutTopics: '未归专题',
-          duplicateReferences: '疑似重复文号',
-          unhelpfulAnswers: '低评价问答',
-          searchWithoutResult: '无结果搜索',
-        }"
-        :key="key"
-        class="signal"
-        :class="{ 'signal--zero': !governanceInsights[key] }"
-      >
-        <span>{{ label }}</span
-        ><strong>{{ governanceInsights[key] || 0 }}</strong>
-      </div>
-      <el-tooltip content="启用后，内容提交者不能审核或发布自己创建的内容。管理员仍可调整此策略。">
-        <el-switch
-          v-if="can('content:publish')"
-          v-model="governancePolicy.contentSeparationOfDuties"
-          inline-prompt
-          active-text="职责分离"
-          inactive-text="可自审"
-          :loading="policySaving"
-          @change="saveSeparationOfDuties(Boolean($event))"
-        />
-      </el-tooltip>
-    </div>
     <div class="filter-bar">
       <el-input v-model="filters.keyword" placeholder="标题 / 文号 / 机关" clearable /><el-select
         v-model="filters.contentType"
@@ -490,13 +607,77 @@ watch(
         >查询</el-button
       >
     </div>
+    <div v-if="selectedRows.length" class="batch-bar">
+      <span
+        >已选择 <strong>{{ selectedRows.length }}</strong> 项</span
+      >
+      <div class="batch-actions">
+        <el-button
+          v-if="reviewMode && can('content:review')"
+          type="success"
+          size="small"
+          :disabled="!eligibleForBatch('approve').length"
+          @click="batchAction('approve')"
+          >批量通过</el-button
+        ><el-button
+          v-if="reviewMode && can('content:review')"
+          type="danger"
+          size="small"
+          :disabled="!eligibleForBatch('reject').length"
+          @click="batchAction('reject')"
+          >批量驳回</el-button
+        ><el-button
+          v-if="publicationMode && can('content:publish')"
+          type="primary"
+          size="small"
+          :disabled="!eligibleForBatch('publish').length"
+          @click="batchAction('publish')"
+          >批量发布</el-button
+        ><el-button
+          v-if="publicationMode && can('content:publish')"
+          type="danger"
+          size="small"
+          :disabled="!eligibleForBatch('offline').length"
+          @click="batchAction('offline')"
+          >批量下线</el-button
+        ><el-button
+          v-if="!reviewMode && !publicationMode && can('content:submit')"
+          type="primary"
+          size="small"
+          :disabled="!eligibleForBatch('submit').length"
+          @click="batchAction('submit')"
+          >批量提交</el-button
+        ><el-button link size="small" @click="clearSelection">取消选择</el-button>
+      </div>
+    </div>
     <PageState :loading="loading" :error="error" :empty="!rows.length"
-      ><el-table :data="rows"
-        ><el-table-column label="内容" min-width="250"
+      ><el-table ref="tableRef" :data="rows" row-key="contentId" @selection-change="selectionChange"
+        ><el-table-column type="selection" width="45" /><el-table-column label="内容" min-width="250"
           ><template #default="s"
             ><strong>{{ s.row.title }}</strong>
             <div class="muted">
               {{ s.row.documentNumber || '无文号' }} · {{ s.row.issuingAuthority || '机关待补充' }}
+            </div>
+            <div v-if="!reviewMode && !publicationMode" class="workflow-link">
+              <el-button
+                v-if="s.row.workflowStatus === 'reviewing' && can('content:review')"
+                link
+                type="primary"
+                size="small"
+                @click="router.push('/console/reviews')"
+                >去审核中心处理 →</el-button
+              ><el-button
+                v-else-if="
+                  s.row.reviewDecision === 'approved' &&
+                  s.row.workflowStatus !== 'published' &&
+                  can('content:publish')
+                "
+                link
+                type="primary"
+                size="small"
+                @click="router.push('/console/publications')"
+                >去发布管理发布 →</el-button
+              >
             </div></template
           ></el-table-column
         ><el-table-column label="分类" width="120"
@@ -505,82 +686,38 @@ watch(
           prop="parseStatus"
           label="解析"
           width="100"
-        /><el-table-column label="流程" width="140"
+        /><el-table-column label="流程" width="110"
           ><template #default="s"
-            ><el-tag
-              :type="
-                s.row.workflowStatus === 'published'
-                  ? s.row.online
-                    ? 'success'
-                    : 'info'
-                  : s.row.reviewDecision === 'rejected'
-                    ? 'danger'
-                    : 'warning'
-              "
-              >{{ status(s.row) }}</el-tag
-            ></template
+            ><el-tag :type="statusTagType(s.row)" size="small">{{ status(s.row) }}</el-tag></template
           ></el-table-column
-        ><el-table-column prop="validityStatus" label="效力" width="100" /><el-table-column
+        ><el-table-column prop="validityStatus" label="效力" width="90" /><el-table-column
           prop="updateTime"
           label="更新时间"
-          min-width="160"
-        /><el-table-column label="操作" min-width="350" fixed="right"
+          min-width="150"
+        /><el-table-column label="操作" width="150"
           ><template #default="s"
-            ><el-button link @click="inspect(s.row)">预览</el-button
-            ><el-button
-              v-if="s.row.workflowStatus === 'draft' && can('content:update')"
-              link
-              @click="openEdit(s.row)"
-              >编辑</el-button
-            ><el-button
-              v-if="s.row.workflowStatus === 'draft' && can('content:submit')"
-              link
-              type="primary"
-              :disabled="s.row.parseStatus !== 'completed' || actionPendingId === s.row.contentId"
-              @click="action(s.row, 'submit')"
-              >提交</el-button
-            ><template v-if="s.row.workflowStatus === 'reviewing' && s.row.reviewDecision !== 'approved'"
-              ><el-button
-                v-if="can('content:review')"
-                link
-                type="success"
-                :disabled="Boolean(actionPendingId)"
-                @click="action(s.row, 'approve')"
-                >通过</el-button
-              ><el-button
-                v-if="can('content:review')"
-                link
-                type="danger"
-                :disabled="Boolean(actionPendingId)"
-                @click="action(s.row, 'reject')"
-                >驳回</el-button
-              ></template
-            ><el-button
-              v-if="
-                s.row.reviewDecision === 'approved' &&
-                s.row.workflowStatus !== 'published' &&
-                can('content:publish')
-              "
-              link
-              type="primary"
-              :disabled="Boolean(actionPendingId)"
-              @click="action(s.row, 'publish')"
-              >发布</el-button
-            ><el-button
-              v-if="s.row.workflowStatus === 'published' && s.row.online && can('content:publish')"
-              link
-              type="danger"
-              :disabled="Boolean(actionPendingId)"
-              @click="action(s.row, 'offline')"
-              >下线</el-button
-            ><el-button
-              v-if="s.row.workflowStatus === 'published' && !s.row.online && can('content:publish')"
-              link
-              type="primary"
-              :disabled="Boolean(actionPendingId)"
-              @click="action(s.row, 'restore')"
-              >恢复</el-button
-            ></template
+            ><div class="action-cell">
+              <el-button link type="primary" size="small" @click="inspect(s.row)">详情</el-button
+              ><el-dropdown
+                v-if="availableActions(s.row).length"
+                trigger="click"
+                placement="bottom-end"
+                @command="(cmd) => handleActionCommand(cmd, s.row)"
+                ><el-button link size="small"
+                  >更多<el-icon class="el-icon--right"><arrow-down /></el-icon></el-button
+                ><template #dropdown
+                  ><el-dropdown-menu
+                    ><el-dropdown-item
+                      v-for="item in availableActions(s.row)"
+                      :key="item.name"
+                      :command="item.name"
+                      :disabled="item.disabled"
+                      >{{ item.label }}</el-dropdown-item
+                    ></el-dropdown-menu
+                  ></template
+                ></el-dropdown
+              >
+            </div></template
           ></el-table-column
         ></el-table
       ><AppPagination
@@ -682,16 +819,43 @@ watch(
       ></template
     ></el-dialog
   >
-  <el-dialog v-model="detailDialog" title="内容预览与版本" width="900"
+  <el-drawer
+    v-model="detailDialog"
+    title="内容详情"
+    size="680"
+    direction="rtl"
+    destroy-on-close
+    class="content-detail-drawer"
     ><template v-if="detail"
-      ><el-descriptions :column="3" border
-        ><el-descriptions-item label="标题" :span="3">{{ detail.title }}</el-descriptions-item
+      ><div class="detail-header">
+        <h3>{{ detail.title }}</h3>
+        <el-tag :type="statusTagType(detail)" size="small">{{ status(detail) }}</el-tag>
+      </div>
+      <div class="workflow-steps">
+        <div
+          v-for="(step, idx) in [
+            { key: 'draft', label: '草稿' },
+            { key: 'reviewing', label: '审核中' },
+            { key: 'approved', label: '待发布' },
+            { key: 'published', label: '已发布' },
+          ]"
+          :key="step.key"
+          class="workflow-step"
+          :class="{
+            active: workflowStepIndex(detail) >= idx,
+            current: workflowStepIndex(detail) === idx,
+          }"
+        >
+          {{ step.label }}
+        </div>
+      </div>
+      <el-descriptions :column="2" border
         ><el-descriptions-item label="文号">{{ detail.documentNumber || '—' }}</el-descriptions-item
-        ><el-descriptions-item label="机关">{{ detail.issuingAuthority || '—' }}</el-descriptions-item
+        ><el-descriptions-item label="发文机关">{{ detail.issuingAuthority || '—' }}</el-descriptions-item
+        ><el-descriptions-item label="分类">{{ categoryLabel(detail.contentType) }}</el-descriptions-item
         ><el-descriptions-item label="效力">{{ detail.validityStatus }}</el-descriptions-item
-        ><el-descriptions-item label="流程">{{ status(detail) }}</el-descriptions-item
-        ><el-descriptions-item label="解析">{{ detail.parseStatus }}</el-descriptions-item
         ><el-descriptions-item label="版本">v{{ detail.sourceVersion }}</el-descriptions-item
+        ><el-descriptions-item label="解析">{{ detail.parseStatus }}</el-descriptions-item
         ><el-descriptions-item label="计划上线">{{
           (detail as PartyContent & { scheduledOnlineAt?: string }).scheduledOnlineAt || '—'
         }}</el-descriptions-item>
@@ -700,6 +864,9 @@ watch(
         }}</el-descriptions-item>
         ></el-descriptions
       >
+      <div v-if="detail.topicCodes?.length" class="detail-topics">
+        <el-tag v-for="code in detail.topicCodes" :key="code" size="small">{{ code }}</el-tag>
+      </div>
       <div v-if="Object.keys(contentImpact).length" class="impact-summary">
         <el-tag>关联专题 {{ contentImpact.topicCount || 0 }}</el-tag
         ><el-tag>收藏 {{ contentImpact.favorites || 0 }}</el-tag>
@@ -711,8 +878,8 @@ watch(
           {{ section.content }}
         </p>
       </div>
-      <h3>版本记录</h3>
-      <el-table :data="pagedVersions"
+      <h4>版本记录</h4>
+      <el-table :data="pagedVersions" size="small"
         ><el-table-column prop="source_version" label="版本" /><el-table-column
           prop="parse_status"
           label="解析" /><el-table-column prop="workflow_status" label="流程" /><el-table-column
@@ -721,8 +888,22 @@ watch(
       ><AppPagination
         v-model:page="versionPage"
         v-model:page-size="versionPageSize"
-        :total="detail.versions?.length || 0" /></template
-  ></el-dialog>
+        :total="detail.versions?.length || 0"
+      />
+      <div class="drawer-actions">
+        <el-button
+          v-for="item in availableActions(detail).filter((a) => a.name !== 'edit')"
+          :key="item.name"
+          :type="item.name === 'offline' || item.name === 'reject' ? 'danger' : 'primary'"
+          :disabled="item.disabled"
+          @click="handleActionCommand(item.name, detail)"
+          >{{ item.label }}</el-button
+        ><el-button v-if="availableActions(detail).some((a) => a.name === 'edit')" @click="openEdit(detail)"
+          >编辑</el-button
+        >
+      </div></template
+    ></el-drawer
+  >
 </template>
 <style scoped>
 .panel {
@@ -731,7 +912,7 @@ watch(
 
 .panel :deep(.page-header) {
   align-items: center;
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .panel :deep(.page-header h2),
@@ -742,37 +923,91 @@ watch(
 .governance-signals {
   display: flex;
   flex-wrap: nowrap;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
-  margin: 6px 0 8px;
+  margin: 0 0 2px;
   overflow-x: auto;
-  padding-bottom: 2px;
+}
+
+.governance-signals--inline {
+  margin: 0;
 }
 
 .signal {
   flex: 0 0 auto;
-  min-width: 72px;
-  padding: 4px 8px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: auto;
+  padding: 1px 6px;
   border: 1px solid var(--el-border-color-lighter);
+  border-left: 3px solid transparent;
   border-radius: 6px;
   background: var(--el-fill-color-lighter);
-}
-
-.signal--zero {
-  opacity: 0.65;
-}
-
-.signal span {
-  display: block;
-  color: var(--el-text-color-secondary);
-  font-size: 11px;
-  line-height: 1.3;
+  transition: 150ms ease;
   white-space: nowrap;
 }
 
+.signal--zero {
+  opacity: 0.5;
+  filter: grayscale(0.7);
+}
+
+.signal--toggle {
+  align-items: center;
+  gap: 0;
+  padding: 1px 6px;
+  border-left: 1px solid var(--el-border-color-lighter);
+  cursor: default;
+}
+
+.signal--toggle .el-switch {
+  --el-switch-core-height: 16px;
+}
+
+.signal--info {
+  border-left-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.signal--warning {
+  border-left-color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
+}
+
+.signal--danger {
+  border-left-color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+}
+
+.signal--zero.signal--info,
+.signal--zero.signal--warning,
+.signal--zero.signal--danger {
+  background: var(--el-fill-color-lighter);
+}
+
+.signal span {
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+  line-height: 1;
+}
+
 .signal strong {
-  font-size: 15px;
-  line-height: 1.25;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.signal--info strong {
+  color: var(--el-color-primary);
+}
+
+.signal--warning strong {
+  color: var(--el-color-warning);
+}
+
+.signal--danger strong {
+  color: var(--el-color-danger);
 }
 
 .filter-bar {
@@ -794,10 +1029,109 @@ watch(
   max-width: 180px;
 }
 
+.batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--el-color-primary-light-9);
+  border: 1px solid var(--el-color-primary-light-7);
+  border-radius: 8px;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .impact-summary {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin: 14px 0;
+}
+
+.action-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.detail-header h3 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.workflow-steps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 12px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 8px;
+}
+
+.workflow-step {
+  flex: 1;
+  text-align: center;
+  padding: 6px 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  background: var(--el-bg-color);
+  border-radius: 6px;
+  border: 1px solid var(--el-border-color-lighter);
+}
+
+.workflow-step.active {
+  color: var(--el-color-primary);
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+}
+
+.workflow-step.current {
+  font-weight: 600;
+  box-shadow: 0 0 0 2px var(--el-color-primary-light-7);
+}
+
+.workflow-link {
+  margin-top: 4px;
+}
+
+.workflow-link .el-button {
+  padding: 0;
+  height: auto;
+}
+
+.detail-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.drawer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+:deep(.content-detail-drawer .el-drawer__body) {
+  padding: 20px;
+  overflow-y: auto;
 }
 </style>

@@ -6,11 +6,13 @@ import { useAuthStore } from '../stores/auth'
 import { useExperienceStore } from '../stores/experience'
 import { accountNavigationItem, authorizedNavigationSections } from '../security/navigation'
 import { consolePath, portalHome } from '../security/siteRoute'
+import { authorizedJson } from '../api/client'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const experience = useExperienceStore()
 const mobileNavigationOpen = ref(false)
+const governanceCounts = ref<Record<string, number>>({})
 const primaryOrganization = computed(() => auth.user?.organizationCodes?.[0] || '未分配组织')
 const organizationInitial = computed(() => primaryOrganization.value.trim().slice(0, 1).toUpperCase() || 'K')
 const sections = computed(() =>
@@ -19,9 +21,25 @@ const sections = computed(() =>
     items: section.items.map((item) => ({
       ...item,
       path: consolePath(item.path),
+      count:
+        item.path === '/console/reviews'
+          ? governanceCounts.value.reviewing || 0
+          : item.path === '/console/publications'
+            ? governanceCounts.value.pendingPublish || 0
+            : 0,
     })),
   })),
 )
+async function loadGovernanceCounts() {
+  if (!auth.hasAnyPermission(['content:read'])) return
+  try {
+    governanceCounts.value =
+      (await authorizedJson<Record<string, number>>('/api/v1/admin/governance/insights')) || {}
+  } catch {
+    governanceCounts.value = {}
+  }
+}
+loadGovernanceCounts()
 const accountMenu = computed(() => {
   const item = accountNavigationItem()
   return { ...item, path: consolePath(item.path) }
@@ -84,6 +102,9 @@ async function switchAccount() {
               >
                 <span class="navigation-badge" :data-badge="item.badge" aria-hidden="true"></span>
                 <span class="navigation-title">{{ item.title }}</span>
+                <span v-if="item.count" class="navigation-count">{{
+                  item.count > 99 ? '99+' : item.count
+                }}</span>
               </router-link>
             </div>
           </section>

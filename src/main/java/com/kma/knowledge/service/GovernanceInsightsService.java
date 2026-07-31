@@ -71,7 +71,15 @@ public class GovernanceInsightsService {
                 GROUP BY space_id,document_number,issuing_authority HAVING count(*)>1) x
                 """),
             "unhelpfulAnswers", count("SELECT count(*) FROM knowledge_qa_feedback WHERE rating='unhelpful' AND created_at>=now()-interval '30 days'"),
-            "searchWithoutResult", count("SELECT count(*) FROM knowledge_portal_event WHERE event_type='search_empty' AND create_time>=now()-interval '30 days'"));
+            "searchWithoutResult", count("SELECT count(*) FROM knowledge_portal_event WHERE event_type='search_empty' AND create_time>=now()-interval '30 days'"),
+            "reviewing", count("""
+                SELECT count(*) FROM knowledge_doc WHERE publication_managed AND workflow_status='reviewing'
+                AND (review_decision IS NULL OR review_decision != 'approved')
+                """),
+            "pendingPublish", count("""
+                SELECT count(*) FROM knowledge_doc WHERE publication_managed AND review_decision='approved'
+                AND workflow_status != 'published'
+                """));
     }
 
     public Map<String, Object> contentImpact(Long contentId) {
