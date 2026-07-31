@@ -44,7 +44,11 @@ const {
   resetPage: resetAclPage,
 } = useClientPagination(acls)
 const principalOptions = ref<PrincipalOption[]>([])
+const principalLoading = ref(false)
 const aclImpact = ref<Record<string, unknown>>()
+const search = ref('')
+const viewMode = ref<'list' | 'card'>('list')
+const selectedProfileCode = ref('')
 const form = reactive<SpaceForm>({
   spaceCode: '',
   name: '',
@@ -67,6 +71,28 @@ const validProfiles = computed(() =>
     (profile): profile is ModelProfile & { profileCode: string } => !!profile.profileCode,
   ),
 )
+const filteredRows = computed(() => {
+  const keyword = search.value.trim().toLowerCase()
+  if (!keyword) return rows.value
+  return rows.value.filter(
+    (row) => row.spaceCode?.toLowerCase().includes(keyword) || row.name?.toLowerCase().includes(keyword),
+  )
+})
+
+function statusTag(status?: string) {
+  switch (status) {
+    case 'active':
+      return { label: '启用', type: 'success' as const }
+    case 'disabled':
+      return { label: '停用', type: 'info' as const }
+    default:
+      return { label: status || '-', type: 'info' as const }
+  }
+}
+function datasetName(datasetId?: number) {
+  const dataset = datasets.value.find((item) => item.datasetId === datasetId)
+  return dataset?.name || '-'
+}
 
 async function load(reset = false) {
   if (reset) page.value = 1
@@ -113,13 +139,26 @@ function defaults() {
     scoreThreshold: 0.35,
   })
 }
+function applyFirstProfile() {
+  const first = validProfiles.value[0]
+  selectedProfileCode.value = first?.profileCode || ''
+  if (first) {
+    Object.assign(form, {
+      embeddingProvider: first.provider,
+      embeddingModel: first.modelName,
+      embeddingDim: first.dimension,
+    })
+  }
+}
 function openCreate() {
   editing.value = undefined
   defaults()
+  applyFirstProfile()
   dialog.value = true
 }
 function openEdit(row: Space) {
   editing.value = row
+  selectedProfileCode.value = ''
   Object.assign(form, row)
   dialog.value = true
 }
@@ -207,12 +246,17 @@ async function toggle(row: Space) {
   )
   if (result.ok) await load()
 }
-async function loadPrincipals(type = aclForm.principalType) {
+async function loadPrincipals(type = aclForm.principalType, keyword = '') {
   aclForm.principalValue = ''
   aclImpact.value = undefined
-  principalOptions.value = asList<PrincipalOption>(
-    await unwrap(api.GET('/api/v1/admin/access/principals', { params: { query: { type, keyword: '' } } })),
-  )
+  principalLoading.value = true
+  try {
+    principalOptions.value = asList<PrincipalOption>(
+      await unwrap(api.GET('/api/v1/admin/access/principals', { params: { query: { type, keyword } } })),
+    )
+  } finally {
+    principalLoading.value = false
+  }
 }
 async function loadAclImpact() {
   if (!aclForm.principalValue) {
@@ -282,35 +326,95 @@ onMounted(load)
         <span class="eyebrow">KNOWLEDGE CATALOG</span>
         <h2>知识空间</h2>
       </div>
-      <el-button v-permission="'space:create'" type="primary" @click="openCreate">创建知识空间</el-button>
+      <div class="toolbar-actions">
+        <el-radio-group v-model="viewMode" size="small">
+          <el-radio-button label="list">列表</el-radio-button>
+          <el-radio-button label="card">卡片</el-radio-button>
+        </el-radio-group>
+        <el-button v-permission="'space:create'" type="primary" @click="openCreate">创建知识空间</el-button>
+      </div>
     </div>
-    <PageState :loading="loading" :error="error" :empty="!rows.length"
-      ><el-table :data="rows"
-        ><el-table-column prop="spaceCode" label="空间编码" /><el-table-column
-          prop="name"
-          label="名称"
-        /><el-table-column prop="embeddingModel" label="Embedding" /><el-table-column
-          prop="embeddingDim"
-          label="维度"
-          width="90"
-        /><el-table-column prop="defaultTopK" label="Top K" width="80" /><el-table-column
-          prop="status"
-          label="状态"
-          width="100"
-        /><el-table-column label="操作" width="330"
-          ><template #default="s"
-            ><el-button v-permission="'space:update'" link @click="openEdit(s.row)">编辑</el-button
-            ><el-button v-permission="'space:acl:manage'" link @click="openAcl(s.row)">ACL</el-button
-            ><el-button v-permission="'space:update'" link @click="toggle(s.row)">{{
-              s.row.status === 'active' ? '停用' : '启用'
-            }}</el-button
-            ><el-button v-permission="'space:reindex'" link @click="reindex(s.row)">重建</el-button
-            ><el-button v-permission="'space:delete'" link type="danger" @click="remove(s.row)"
-              >删除</el-button
-            ></template
-          ></el-table-column
-        ></el-table
-      ><AppPagination
+    <div class="filter-bar">
+      <el-input v-model="search" placeholder="搜索空间编码或名称" clearable />
+    </div>
+    <PageState :loading="loading" :error="error" :empty="!filteredRows.length">
+      <template v-if="viewMode === 'list'">
+        <el-table :data="filteredRows"
+          ><el-table-column prop="spaceCode" label="空间编码" /><el-table-column
+            prop="name"
+            label="名称"
+          /><el-table-column label="数据集" min-width="140"
+            ><template #default="s">{{ datasetName(s.row.datasetId) }}</template></el-table-column
+          ><el-table-column prop="embeddingModel" label="Embedding" /><el-table-column
+            prop="embeddingDim"
+            label="维度"
+            width="90"
+          /><el-table-column prop="defaultTopK" label="Top K" width="80" /><el-table-column
+            label="状态"
+            width="100"
+            ><template #default="s"
+              ><el-tag :type="statusTag(s.row.status).type">{{
+                statusTag(s.row.status).label
+              }}</el-tag></template
+            ></el-table-column
+          ><el-table-column label="操作" width="330"
+            ><template #default="s"
+              ><el-button v-permission="'space:update'" link @click="openEdit(s.row)">编辑</el-button
+              ><el-button v-permission="'space:acl:manage'" link @click="openAcl(s.row)">ACL</el-button
+              ><el-button v-permission="'space:update'" link @click="toggle(s.row)">{{
+                s.row.status === 'active' ? '停用' : '启用'
+              }}</el-button
+              ><el-button v-permission="'space:reindex'" link @click="reindex(s.row)">重建</el-button
+              ><el-button v-permission="'space:delete'" link type="danger" @click="remove(s.row)"
+                >删除</el-button
+              ></template
+            ></el-table-column
+          ></el-table
+        >
+      </template>
+      <template v-else>
+        <el-row :gutter="16" class="space-card-grid">
+          <el-col v-for="row in filteredRows" :key="row.spaceId" :xs="24" :sm="12" :md="8" :lg="8">
+            <el-card class="space-card" shadow="hover">
+              <div class="space-card-header">
+                <div>
+                  <div class="space-card-title">{{ row.name }}</div>
+                  <div class="space-card-code">{{ row.spaceCode }}</div>
+                </div>
+                <el-tag :type="statusTag(row.status).type" size="small">{{
+                  statusTag(row.status).label
+                }}</el-tag>
+              </div>
+              <div class="space-card-body">
+                <div class="space-card-row">
+                  <span class="space-card-label">Embedding</span>
+                  <span>{{ row.embeddingModel }} · {{ row.embeddingDim }}</span>
+                </div>
+                <div class="space-card-row">
+                  <span class="space-card-label">Top K</span>
+                  <span>{{ row.defaultTopK }}</span>
+                </div>
+                <div class="space-card-row">
+                  <span class="space-card-label">数据集</span>
+                  <span>{{ datasetName(row.datasetId) }}</span>
+                </div>
+              </div>
+              <div class="space-card-actions">
+                <el-button v-permission="'space:update'" link @click="openEdit(row)">编辑</el-button>
+                <el-button v-permission="'space:acl:manage'" link @click="openAcl(row)">ACL</el-button>
+                <el-button v-permission="'space:update'" link @click="toggle(row)">{{
+                  row.status === 'active' ? '停用' : '启用'
+                }}</el-button>
+                <el-button v-permission="'space:reindex'" link @click="reindex(row)">重建</el-button>
+                <el-button v-permission="'space:delete'" link type="danger" @click="remove(row)"
+                  >删除</el-button
+                >
+              </div>
+            </el-card>
+          </el-col>
+        </el-row>
+      </template>
+      <AppPagination
         v-model:page="page"
         v-model:page-size="pageSize"
         :total="total"
@@ -332,7 +436,7 @@ onMounted(load)
             :label="d.name"
             :value="d.datasetId" /></el-select></el-form-item
       ><el-form-item v-if="!editing && profiles.length" label="Embedding Profile"
-        ><el-select clearable class="full-width" @change="useProfile"
+        ><el-select v-model="selectedProfileCode" clearable class="full-width" @change="useProfile"
           ><el-option
             v-for="p in validProfiles"
             :key="p.profileCode"
@@ -377,7 +481,7 @@ onMounted(load)
       title="组织 ACL 默认覆盖其全部下级组织成员；系统禁止移除最后一个有效管理授权。"
       class="spaced-bottom" />
     <div class="filter-bar">
-      <el-select v-model="aclForm.principalType" aria-label="主体类型" @change="loadPrincipals"
+      <el-select v-model="aclForm.principalType" aria-label="主体类型" @change="loadPrincipals()"
         ><el-option label="角色" value="role" /><el-option label="用户" value="user" /><el-option
           label="组织"
           value="org" /></el-select
@@ -385,7 +489,11 @@ onMounted(load)
         v-model="aclForm.principalValue"
         aria-label="授权主体"
         filterable
-        placeholder="选择授权主体"
+        remote
+        reserve-keyword
+        placeholder="输入关键词搜索授权主体"
+        :remote-method="(q: string) => loadPrincipals(aclForm.principalType, q)"
+        :loading="principalLoading"
         class="min-width-md"
         @change="loadAclImpact"
         ><el-option
@@ -438,3 +546,52 @@ onMounted(load)
     ><AppPagination v-model:page="aclPage" v-model:page-size="aclPageSize" :total="aclTotal"
   /></el-dialog>
 </template>
+
+<style scoped>
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.space-card-grid {
+  margin-bottom: 16px;
+}
+.space-card {
+  margin-bottom: 16px;
+}
+.space-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.space-card-title {
+  font-weight: 600;
+  font-size: 16px;
+}
+.space-card-code {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  margin-top: 4px;
+}
+.space-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.space-card-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.space-card-label {
+  color: var(--el-text-color-secondary);
+}
+.space-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+</style>

@@ -57,4 +57,14 @@ describe('portalSse parser', () => {
     parser.flush()
     expect(events).toEqual([{ kind: 'delta', text: '尾巴' }])
   })
+
+  it('ignores null/empty message payloads', () => {
+    const { events, parser } = collect()
+    parser.push('event: message\ndata: null\n\n')
+    parser.push('event: message\ndata: NULL\n\n')
+    parser.push('event: message\ndata: \n\n')
+    parser.push('event: message\ndata: 有效内容\n\n')
+    parser.flush()
+    expect(events).toEqual([{ kind: 'delta', text: '有效内容' }])
+  })
 })

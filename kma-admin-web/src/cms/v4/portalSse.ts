@@ -19,7 +19,10 @@ function mapEvent(raw: RawSseEvent): PortalAskStreamEvent | undefined {
       return { kind: 'citations', items: [] }
     }
   }
-  if (raw.name === 'message') return { kind: 'delta', text: raw.data }
+  if (raw.name === 'message') {
+    if (!raw.data || raw.data.trim() === '' || raw.data.trim().toLowerCase() === 'null') return undefined
+    return { kind: 'delta', text: raw.data }
+  }
   if (raw.name === 'done') {
     const sessionId = Number(raw.data)
     return { kind: 'done', sessionId: Number.isSafeInteger(sessionId) ? sessionId : undefined }

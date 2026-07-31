@@ -132,8 +132,10 @@ async function rate(value: 'helpful' | 'unhelpful') {
 
 function onEvent(event: QaStreamEvent, data: string) {
   if (!answer.value) return
-  if (event === 'message') queueText(data)
-  else if (event === 'citations') {
+  if (event === 'message') {
+    if (!data || data.trim() === '' || data.trim().toLowerCase() === 'null') return
+    queueText(data)
+  } else if (event === 'citations') {
     try {
       answer.value.citations = JSON.parse(data) as Citation[]
     } catch {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox, type TableInstance, type UploadFile } from 'element-plus'
+import { UploadFilled } from '@element-plus/icons-vue'
 import { api, asList, errorMessage, unwrap } from '../api/client'
 import AppPagination from '../components/AppPagination.vue'
 import PageState from '../components/PageState.vue'
@@ -11,6 +12,39 @@ import { useMutationAction } from '../composables/useMutationAction'
 
 type DocumentRow = components['schemas']['DocVO']
 type DocumentVersion = Record<string, unknown>
+
+interface ErrorDetailDoc {
+  docId?: number
+  title?: string
+  spaceCode?: string
+  sourceVersion?: number
+  parseStatus?: string
+  errorMessage?: string
+}
+
+interface ParseStatusInfo {
+  label: string
+  type: 'success' | 'warning' | 'danger' | 'info'
+}
+
+const PARSE_STATUS_MAP: Record<string, ParseStatusInfo> = {
+  pending: { label: '等待', type: 'info' },
+  processing: { label: '处理中', type: 'warning' },
+  success: { label: '成功', type: 'success' },
+  completed: { label: '成功', type: 'success' },
+  failed: { label: '失败', type: 'danger' },
+  error: { label: '失败', type: 'danger' },
+  needs_ocr: { label: '需要 OCR', type: 'warning' },
+  ocr_pending: { label: 'OCR 中', type: 'warning' },
+}
+
+function parseStatusInfo(status?: string): ParseStatusInfo {
+  return PARSE_STATUS_MAP[status || ''] || { label: status || '-', type: 'info' }
+}
+function isErrorStatus(status?: string) {
+  return ['failed', 'error', 'needs_ocr', 'ocr_pending'].includes(status || '')
+}
+
 const mutation = useMutationAction()
 
 const rows = ref<DocumentRow[]>([]),
@@ -29,8 +63,9 @@ const {
 } = useClientPagination(versions)
 const dialog = ref(false),
   versionsDialog = ref(false),
-  file = ref<File>(),
-  mode = ref<'file' | 'text'>('file')
+  file = ref<File>()
+const uploadFileList = ref<UploadFile[]>([])
+const mode = ref<'file' | 'text'>('file')
 const filters = reactive({ title: '', spaceCode: '', parseStatus: '' })
 const form = reactive({
   spaceCode: 'default',
@@ -40,6 +75,12 @@ const form = reactive({
   sourceTag: 'manual',
   sourceVersion: 1,
 })
+const tableRef = ref<TableInstance | null>(null)
+const selectedRows = ref<DocumentRow[]>([])
+const drawerVisible = ref(false)
+const drawerDoc = ref<ErrorDetailDoc | null>(null)
+const batchLoading = ref(false)
+const hasSelected = computed(() => selectedRows.value.length > 0)
 
 async function load(reset = false) {
   if (reset) page.value = 1
@@ -65,6 +106,8 @@ async function load(reset = false) {
     )
     rows.value = result.items
     total.value = result.total
+    selectedRows.value = []
+    tableRef.value?.clearSelection()
   } catch (e: unknown) {
     error.value = errorMessage(e, '无法读取文档')
   } finally {
@@ -74,6 +117,7 @@ async function load(reset = false) {
 function openIngest() {
   mode.value = 'file'
   file.value = undefined
+  uploadFileList.value = []
   Object.assign(form, {
     spaceCode: '',
     title: '',
@@ -83,6 +127,12 @@ function openIngest() {
     sourceVersion: 1,
   })
   dialog.value = true
+}
+function handleFileChange(uploadFile: UploadFile) {
+  file.value = uploadFile.raw
+}
+function handleFileRemove() {
+  file.value = undefined
 }
 async function ingest() {
   const externalRef = form.externalRef || crypto.randomUUID()
@@ -169,6 +219,67 @@ async function remove(row: DocumentRow) {
   )
   if (result.ok) await load()
 }
+function showError(row: DocumentRow | DocumentVersion) {
+  drawerDoc.value = row as ErrorDetailDoc
+  drawerVisible.value = true
+}
+async function batchReindex() {
+  const targets = selectedRows.value.filter((row) => row.docId)
+  if (!targets.length) return
+  batchLoading.value = true
+  let success = 0
+  let failed = 0
+  await Promise.all(
+    targets.map(async (row) => {
+      try {
+        await unwrap(
+          api.POST('/api/v1/documents/{docId}/reindex', {
+            params: { path: { docId: row.docId! } },
+          }),
+        )
+        success++
+      } catch {
+        failed++
+      }
+    }),
+  )
+  batchLoading.value = false
+  ElMessage.success(`批量重建完成：成功 ${success} 条${failed ? `，失败 ${failed} 条` : ''}`)
+  await load()
+}
+async function batchRemove() {
+  const targets = selectedRows.value.filter((row) => row.docId)
+  if (!targets.length) return
+  try {
+    await ElMessageBox.confirm(
+      `确认删除选中的 ${targets.length} 个文档版本？删除后不可恢复。`,
+      '批量删除文档',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  batchLoading.value = true
+  let success = 0
+  let failed = 0
+  await Promise.all(
+    targets.map(async (row) => {
+      try {
+        await unwrap(
+          api.DELETE('/api/v1/documents/{docId}', {
+            params: { path: { docId: row.docId! } },
+          }),
+        )
+        success++
+      } catch {
+        failed++
+      }
+    }),
+  )
+  batchLoading.value = false
+  ElMessage.success(`批量删除完成：成功 ${success} 条${failed ? `，失败 ${failed} 条` : ''}`)
+  await load()
+}
 onMounted(load)
 </script>
 
@@ -194,37 +305,65 @@ onMounted(load)
           value="needs_ocr" /></el-select
       ><el-button @click="load(true)">查询</el-button>
     </div>
+    <div v-if="hasSelected" class="batch-bar">
+      <span>已选择 {{ selectedRows.length }} 项</span>
+      <div>
+        <el-button
+          v-permission="'document:reindex'"
+          type="primary"
+          :loading="batchLoading"
+          :disabled="batchLoading"
+          @click="batchReindex"
+          >批量重建</el-button
+        >
+        <el-button
+          v-permission="'document:delete'"
+          type="danger"
+          :loading="batchLoading"
+          :disabled="batchLoading"
+          @click="batchRemove"
+          >批量删除</el-button
+        >
+      </div>
+    </div>
     <PageState :loading="loading" :error="error" :empty="!rows.length"
-      ><el-table :data="rows"
-        ><el-table-column prop="title" label="文档" min-width="180" /><el-table-column
-          prop="spaceCode"
-          label="空间"
-        /><el-table-column prop="externalRef" label="外部引用" show-overflow-tooltip /><el-table-column
-          prop="sourceVersion"
-          label="版本"
-          width="70"
-        /><el-table-column label="激活" width="70"
+      ><el-table ref="tableRef" :data="rows" @selection-change="(val: DocumentRow[]) => (selectedRows = val)"
+        ><el-table-column type="selection" width="55" /><el-table-column
+          prop="title"
+          label="文档"
+          min-width="180"
+        /><el-table-column prop="spaceCode" label="空间" /><el-table-column
+          prop="externalRef"
+          label="外部引用"
+          show-overflow-tooltip
+        /><el-table-column prop="sourceVersion" label="版本" width="70" /><el-table-column
+          label="当前激活"
+          width="90"
           ><template #default="s"
             ><el-tag :type="s.row.isActive ? 'success' : 'info'">{{
               s.row.isActive ? '是' : '否'
             }}</el-tag></template
           ></el-table-column
-        ><el-table-column prop="parseStatus" label="入库状态" /><el-table-column
-          prop="chunkCount"
-          label="Chunks"
-          width="85"
-        /><el-table-column
+        ><el-table-column label="入库状态" width="110"
+          ><template #default="s"
+            ><el-tag :type="parseStatusInfo(s.row.parseStatus).type">{{
+              parseStatusInfo(s.row.parseStatus).label
+            }}</el-tag></template
+          ></el-table-column
+        ><el-table-column prop="chunkCount" label="分块数" width="85" /><el-table-column
           prop="errorMessage"
           label="失败原因"
           min-width="180"
           show-overflow-tooltip
-        /><el-table-column label="操作" width="210"
+        /><el-table-column label="操作" width="250"
           ><template #default="s"
             ><el-button link @click="showVersions(s.row)">版本</el-button
             ><el-button v-permission="'document:reindex'" link type="primary" @click="reindex(s.row)"
               >重建</el-button
             ><el-button v-permission="'document:delete'" link type="danger" @click="remove(s.row)"
               >删除</el-button
+            ><el-button v-if="isErrorStatus(s.row.parseStatus)" link type="warning" @click="showError(s.row)"
+              >详情</el-button
             ></template
           ></el-table-column
         ></el-table
@@ -257,7 +396,8 @@ onMounted(load)
     <el-form label-position="top"
       ><el-row :gutter="12"
         ><el-col :span="12"
-          ><el-form-item label="知识空间"><SpaceSelect v-model="form.spaceCode" style="width: 100%" /></el-form-item></el-col
+          ><el-form-item label="知识空间"
+            ><SpaceSelect v-model="form.spaceCode" style="width: 100%" /></el-form-item></el-col
         ><el-col :span="12"
           ><el-form-item label="业务引用"
             ><el-input
@@ -271,9 +411,21 @@ onMounted(load)
             ><el-input-number v-model="form.sourceVersion" :min="1" /></el-form-item></el-col></el-row
       ><template v-if="mode === 'file'"
         ><el-form-item label="文件"
-          ><input
-            type="file"
-            @change="file = ($event.target as HTMLInputElement).files?.[0]" /></el-form-item></template
+          ><el-upload
+            v-model:file-list="uploadFileList"
+            drag
+            :auto-upload="false"
+            :limit="1"
+            accept="*/*"
+            :on-change="handleFileChange"
+            :on-remove="handleFileRemove"
+            style="width: 100%"
+          >
+            <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+            <div class="el-upload__text">拖拽文件到此处，或 <em>点击上传</em></div>
+            <template #tip><div class="el-upload__tip">每次仅支持一个文件</div></template>
+          </el-upload></el-form-item
+        ></template
       ><template v-else
         ><el-form-item label="标题"><el-input v-model="form.title" /></el-form-item
         ><el-form-item label="正文"
@@ -302,12 +454,106 @@ onMounted(load)
     ><el-table :data="pagedVersions"
       ><el-table-column prop="docId" label="文档 ID" /><el-table-column
         prop="sourceVersion"
-        label="版本" /><el-table-column prop="isActive" label="激活" /><el-table-column
-        prop="parseStatus"
-        label="状态" /><el-table-column prop="chunkCount" label="Chunks" /><el-table-column
+        label="版本"
+      /><el-table-column label="激活" width="90"
+        ><template #default="s"
+          ><el-tag :type="s.row.isActive ? 'success' : 'info'">{{
+            s.row.isActive ? '是' : '否'
+          }}</el-tag></template
+        ></el-table-column
+      ><el-table-column label="状态" width="110"
+        ><template #default="s"
+          ><el-tag :type="parseStatusInfo(s.row.parseStatus).type">{{
+            parseStatusInfo(s.row.parseStatus).label
+          }}</el-tag></template
+        ></el-table-column
+      ><el-table-column prop="chunkCount" label="分块数" /><el-table-column
         prop="errorMessage"
         label="错误"
-        show-overflow-tooltip /></el-table
+        min-width="160"
+        show-overflow-tooltip
+      /><el-table-column label="操作" width="90"
+        ><template #default="s"
+          ><el-button v-if="isErrorStatus(s.row.parseStatus)" link type="warning" @click="showError(s.row)"
+            >详情</el-button
+          ></template
+        ></el-table-column
+      ></el-table
     ><AppPagination v-model:page="versionPage" v-model:page-size="versionPageSize" :total="versionTotal"
   /></el-dialog>
+  <el-drawer v-model="drawerVisible" title="入库失败详情" size="480">
+    <div v-if="drawerDoc" class="error-detail">
+      <div class="error-detail-row">
+        <span class="error-detail-label">文档 ID</span>
+        <span>{{ drawerDoc.docId || '-' }}</span>
+      </div>
+      <div class="error-detail-row">
+        <span class="error-detail-label">标题</span>
+        <span>{{ drawerDoc.title || '-' }}</span>
+      </div>
+      <div class="error-detail-row">
+        <span class="error-detail-label">空间</span>
+        <span>{{ drawerDoc.spaceCode || '-' }}</span>
+      </div>
+      <div class="error-detail-row">
+        <span class="error-detail-label">版本</span>
+        <span>{{ drawerDoc.sourceVersion || 1 }}</span>
+      </div>
+      <div class="error-detail-row">
+        <span class="error-detail-label">状态</span>
+        <el-tag :type="parseStatusInfo(drawerDoc.parseStatus).type">{{
+          parseStatusInfo(drawerDoc.parseStatus).label
+        }}</el-tag>
+      </div>
+      <div class="error-detail-row vertical">
+        <span class="error-detail-label">错误信息</span>
+        <pre class="error-detail-message">{{ drawerDoc.errorMessage || '无详细错误信息' }}</pre>
+      </div>
+    </div>
+  </el-drawer>
 </template>
+
+<style scoped>
+.batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+}
+.batch-bar > div {
+  display: flex;
+  gap: 8px;
+}
+.error-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.error-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+.error-detail-row.vertical {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.error-detail-label {
+  color: var(--el-text-color-secondary);
+}
+.error-detail-message {
+  width: 100%;
+  margin: 0;
+  padding: 12px;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+}
+</style>

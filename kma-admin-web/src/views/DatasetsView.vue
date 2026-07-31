@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { api, unwrap, asList, errorMessage } from '../api/client'
 import type { components } from '../api/generated/schema'
@@ -11,15 +11,50 @@ import { useMutationAction } from '../composables/useMutationAction'
 
 type Dataset = components['schemas']['DatasetVO']
 type ModelProfile = components['schemas']['ModelProfile']
+type Space = components['schemas']['SpaceVO']
 type RebuildJob = Record<string, unknown>
 type DatasetForm = components['schemas']['DatasetCreateRequest'] & { datasetId?: number }
+
+interface ChunkPreset {
+  label: string
+  value: string
+}
+
+const CHUNK_PRESETS: Record<string, ChunkPreset> = {
+  recursive: { label: '递归分块', value: '{"type":"recursive"}' },
+  fixed: { label: '固定长度', value: '{"type":"fixed","chunkSize":500,"chunkOverlap":50}' },
+  semantic: { label: '语义分块', value: '{"type":"semantic"}' },
+  markdown: { label: 'Markdown 分块', value: '{"type":"markdown"}' },
+  custom: { label: '自定义 JSON', value: '' },
+}
+
+function normalizeJson(json?: string): string | null {
+  if (!json || !json.trim()) return null
+  try {
+    return JSON.stringify(JSON.parse(json))
+  } catch {
+    return json.trim()
+  }
+}
+
+function detectChunkMode(strategy?: string): string {
+  const normalized = normalizeJson(strategy)
+  if (!normalized) return 'custom'
+  for (const key of Object.keys(CHUNK_PRESETS)) {
+    if (key === 'custom') continue
+    if (normalizeJson(CHUNK_PRESETS[key].value) === normalized) return key
+  }
+  return 'custom'
+}
+
 const auth = useAuthStore()
 const mutation = useMutationAction()
 
 const loading = ref(true),
   error = ref(''),
   rows = ref<Dataset[]>([]),
-  profiles = ref<ModelProfile[]>([])
+  profiles = ref<ModelProfile[]>([]),
+  spaces = ref<Space[]>([])
 const page = ref(1),
   pageSize = ref(10),
   total = ref(0)
@@ -38,18 +73,40 @@ const form = reactive<DatasetForm>({
   datasetId: undefined,
   name: '',
   description: '',
-  chunkStrategy: '{"type":"recursive"}',
+  chunkStrategy: CHUNK_PRESETS.recursive.value,
   parseConfig: '{}',
   embeddingProfileCode: '',
   rerankEnabled: true,
   rerankModel: '',
   presetQuestions: '',
 })
+const chunkMode = ref('recursive')
 const embeddingProfiles = computed(() =>
   profiles.value.filter(
     (profile): profile is ModelProfile & { profileCode: string } => !!profile.profileCode,
   ),
 )
+
+function statusTag(status?: string) {
+  switch (status) {
+    case 'active':
+      return { label: '启用', type: 'success' as const }
+    case 'disabled':
+      return { label: '停用', type: 'info' as const }
+    default:
+      return { label: status || '-', type: 'info' as const }
+  }
+}
+function boundSpaces(datasetId?: number) {
+  if (!datasetId) return []
+  return spaces.value.filter((space) => space.datasetId === datasetId)
+}
+function jobProgress(row: RebuildJob) {
+  const processed = Number(row.processed_chunks) || 0
+  const total = Number(row.total_chunks) || 0
+  if (!total) return 0
+  return Math.min(100, Math.round((processed / total) * 100))
+}
 
 async function load(reset = false) {
   if (reset) page.value = 1
@@ -67,10 +124,14 @@ async function load(reset = false) {
     )
     rows.value = result.items
     total.value = result.total
-    const modelProfiles = auth.hasAnyPermission(['model:read'])
-      ? await unwrap(api.GET('/api/v1/model-profiles'))
-      : []
+    const [modelProfiles, spaceData] = await Promise.all([
+      auth.hasAnyPermission(['model:read']) ? unwrap(api.GET('/api/v1/model-profiles')) : Promise.resolve([]),
+      auth.hasAnyPermission(['space:read'])
+        ? unwrap(api.GET('/api/v1/spaces/page', { params: { query: { pageNum: 1, pageSize: 100 } } }))
+        : Promise.resolve(null),
+    ])
     profiles.value = modelProfiles.filter((profile) => profile.capability === 'embedding' && profile.enabled)
+    spaces.value = spaceData ? readServerPage<Space>(spaceData, 1, 100).items : []
   } catch (e: unknown) {
     error.value = errorMessage(e, '无法读取数据集绑定')
   } finally {
@@ -83,25 +144,32 @@ function resetForm() {
     datasetId: undefined,
     name: '',
     description: '',
-    chunkStrategy: '{"type":"recursive"}',
+    chunkStrategy: CHUNK_PRESETS.recursive.value,
     parseConfig: '{}',
     embeddingProfileCode: '',
     rerankEnabled: true,
     rerankModel: '',
     presetQuestions: '',
   })
+  chunkMode.value = 'recursive'
+}
+function applyFirstProfile() {
+  const first = embeddingProfiles.value[0]
+  if (first) form.embeddingProfileCode = first.profileCode
 }
 function openCreate() {
   selected.value = undefined
   jobs.value = []
   editing.value = false
   resetForm()
+  applyFirstProfile()
   dialog.value = true
 }
 async function edit(row: Dataset) {
   selected.value = row
   editing.value = true
   Object.assign(form, row, { datasetId: row.datasetId || 0, name: row.name || '' })
+  chunkMode.value = detectChunkMode(form.chunkStrategy)
   jobs.value = asList(
     await unwrap(api.GET('/api/v1/embedding-rebuilds', { params: { query: { datasetId: row.datasetId! } } })),
   )
@@ -160,18 +228,32 @@ async function remove(row: Dataset) {
 }
 async function rebuild(profileCode?: string) {
   if (!selected.value?.datasetId || !profileCode) return
+  const dataset = selected.value
+  const bound = boundSpaces(dataset.datasetId)
+  const boundText = bound.length
+    ? `该数据集当前被以下 ${bound.length} 个空间绑定：\n${bound.map((space) => `• ${space.name || space.spaceCode}`).join('\n')}\n\n重建期间这些空间的检索可能受到影响。`
+    : '当前没有空间绑定该数据集。'
+  try {
+    await ElMessageBox.confirm(
+      `确认将数据集“${dataset.name}”重建到 ${profileCode}？\n\n${boundText}`,
+      '确认向量重建',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
   const result = await mutation.run(
     () =>
       unwrap(
         api.POST('/api/v1/embedding-rebuilds', {
           params: {
-            query: { datasetId: selected.value!.datasetId!, targetProfileCode: profileCode },
+            query: { datasetId: dataset.datasetId!, targetProfileCode: profileCode },
           },
         }),
       ),
     '向量重建任务已创建',
   )
-  if (result.ok && selected.value) await edit(selected.value)
+  if (result.ok) await edit(dataset)
 }
 async function activate(jobId: number) {
   const result = await mutation.run(
@@ -187,6 +269,13 @@ async function activate(jobId: number) {
   if (selected.value) await edit(selected.value)
   await load()
 }
+
+watch(chunkMode, (mode) => {
+  if (mode !== 'custom' && CHUNK_PRESETS[mode]) {
+    form.chunkStrategy = CHUNK_PRESETS[mode].value
+  }
+})
+
 onMounted(load)
 </script>
 
@@ -210,10 +299,17 @@ onMounted(load)
         /><el-table-column prop="embeddingProfileCode" label="Embedding Profile" /><el-table-column
           prop="chunkStrategy"
           label="分块策略"
-        /><el-table-column prop="rerankEnabled" label="重排" /><el-table-column
-          prop="status"
-          label="状态"
-        /><el-table-column label="操作" width="260"
+        /><el-table-column label="重排" width="90"
+          ><template #default="{ row }"
+            ><el-tag :type="row.rerankEnabled ? 'success' : 'info'">{{
+              row.rerankEnabled ? '启用' : '禁用'
+            }}</el-tag></template
+          ></el-table-column
+        ><el-table-column label="状态" width="100"
+          ><template #default="{ row }"
+            ><el-tag :type="statusTag(row.status).type">{{ statusTag(row.status).label }}</el-tag></template
+          ></el-table-column
+        ><el-table-column label="操作" width="260"
           ><template #default="{ row }"
             ><el-button v-permission="'dataset:update'" link type="primary" @click="edit(row)"
               >绑定与重建</el-button
@@ -249,10 +345,18 @@ onMounted(load)
       ><el-form-item label="描述"><el-input v-model="form.description" type="textarea" /></el-form-item
       ><el-row :gutter="16"
         ><el-col :span="12"
-          ><el-form-item label="分块策略"><el-input v-model="form.chunkStrategy" /></el-form-item></el-col
+          ><el-form-item label="分块策略"
+            ><el-select v-model="chunkMode" class="full-width"
+              ><el-option
+                v-for="[key, preset] in Object.entries(CHUNK_PRESETS)"
+                :key="key"
+                :label="preset.label"
+                :value="key" /></el-select></el-form-item></el-col
         ><el-col :span="12"
           ><el-form-item label="解析配置 JSON"
             ><el-input v-model="form.parseConfig" /></el-form-item></el-col></el-row
+      ><el-form-item v-if="chunkMode === 'custom'" label="自定义分块策略 JSON"
+        ><el-input v-model="form.chunkStrategy" type="textarea" :rows="3" /></el-form-item
       ><el-row :gutter="16"
         ><el-col :span="12"
           ><el-form-item label="Rerank 模型"><el-input v-model="form.rerankModel" /></el-form-item></el-col
@@ -292,10 +396,13 @@ onMounted(load)
         ><el-table-column prop="job_id" label="任务" /><el-table-column
           prop="target_profile_code"
           label="目标 Profile"
-        /><el-table-column prop="status" label="状态" /><el-table-column
-          prop="processed_chunks"
-          label="进度"
-        /><el-table-column prop="error_message" label="错误" show-overflow-tooltip /><el-table-column
+        /><el-table-column prop="status" label="状态" width="110" /><el-table-column label="进度" width="200"
+          ><template #default="{ row }"
+            ><el-progress
+              :percentage="jobProgress(row)"
+              :status="row.status === 'failed' ? 'exception' : row.status === 'ready' ? 'success' : ''"
+              :stroke-width="8" /></template></el-table-column
+        ><el-table-column prop="error_message" label="错误" show-overflow-tooltip /><el-table-column
           label="操作"
           ><template #default="{ row }"
             ><el-button
