@@ -9,9 +9,28 @@ type Payload<T extends ApiEnvelope> = T extends { data?: infer D } ? NonNullable
 let refreshPromise: Promise<string | null> | null = null
 const terminalAuthorizationErrors = new Set(['ACCOUNT_DISABLED', 'REFRESH_TOKEN_REUSED'])
 const publicAuthPaths = new Set(['/api/v1/auth/login', '/api/v1/auth/refresh'])
+const PROACTIVE_REFRESH_SECONDS = 60
 
 function isPublicAuthRequest(request: Request) {
   return publicAuthPaths.has(new URL(request.url, window.location.origin).pathname)
+}
+
+function tokenExpiresInSeconds(token: string): number | null {
+  try {
+    const payload = token.split('.')[1]
+    if (!payload) return null
+    const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
+    const exp = decoded?.exp
+    if (typeof exp !== 'number') return null
+    return Math.max(0, Math.floor(exp - Date.now() / 1000))
+  } catch {
+    return null
+  }
+}
+
+function shouldRefreshProactively(token: string): boolean {
+  const remaining = tokenExpiresInSeconds(token)
+  return remaining !== null && remaining <= PROACTIVE_REFRESH_SECONDS
 }
 
 async function refreshAccessToken(): Promise<string | null> {
@@ -49,8 +68,18 @@ export async function authorizedFetch(input: RequestInfo | URL, init?: RequestIn
   const resolvedInput =
     typeof input === 'string' || input instanceof URL ? new URL(String(input), window.location.origin) : input
   const original = resolvedInput instanceof Request ? resolvedInput : new Request(resolvedInput, init)
+  let currentToken = sessionStorage.getItem('kma_access_token')
+
+  // 在 token 即将过期前主动刷新，避免请求过程中出现 401 重试。
+  if (currentToken && !isPublicAuthRequest(original) && shouldRefreshProactively(currentToken)) {
+    refreshPromise ??= refreshAccessToken().finally(() => {
+      refreshPromise = null
+    })
+    const refreshed = await refreshPromise
+    if (refreshed) currentToken = refreshed
+  }
+
   const headers = new Headers(original.headers)
-  const currentToken = sessionStorage.getItem('kma_access_token')
   if (currentToken && !headers.has('Authorization') && !isPublicAuthRequest(original)) {
     headers.set('Authorization', `Bearer ${currentToken}`)
   }

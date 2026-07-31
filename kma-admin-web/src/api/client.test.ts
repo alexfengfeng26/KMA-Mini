@@ -109,4 +109,32 @@ describe('authorizedFetch', () => {
     const headers = new Headers(refreshInit.headers)
     expect(headers.has('X-KMA-Expected-User')).toBe(false)
   })
+
+  it('proactively refreshes an access token that is about to expire', async () => {
+    // JWT with exp = now + 30s, sub = 1
+    const header = btoa(JSON.stringify({ alg: 'none' })).replace(/=/g, '')
+    const payload = btoa(JSON.stringify({ sub: '1', exp: Math.floor(Date.now() / 1000) + 30 }))
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+    const nearExpiryToken = `${header}.${payload}.`
+    sessionStorage.setItem('kma_access_token', nearExpiryToken)
+
+    const fetchMock = vi
+      .spyOn(window, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ code: 0, data: { accessToken: 'fresh-token' } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(new Response('ok', { status: 200 }))
+
+    const response = await authorizedFetch('/api/protected')
+
+    expect(response.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const protectedCall = fetchMock.mock.calls[1][0] as Request
+    expect(protectedCall.headers.get('Authorization')).toBe('Bearer fresh-token')
+  })
 })
