@@ -715,21 +715,31 @@ watch(
   ></el-dialog>
 </template>
 <style scoped>
+.panel {
+  padding-top: 12px;
+}
+
 .panel :deep(.page-header) {
-  margin-bottom: 8px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.panel :deep(.page-header h2),
+.panel :deep(.page-header p) {
+  margin: 0;
 }
 
 .governance-signals {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  margin: 0 0 12px;
+  margin: 0 0 6px;
 }
 
 .signal {
-  min-width: 92px;
-  padding: 8px 10px;
+  min-width: 88px;
+  padding: 6px 10px;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
   background: var(--el-fill-color-lighter);
@@ -742,8 +752,12 @@ watch(
 }
 
 .signal strong {
-  font-size: 19px;
+  font-size: 18px;
   line-height: 1.3;
+}
+
+.filter-bar {
+  margin-bottom: 12px;
 }
 
 .impact-summary {

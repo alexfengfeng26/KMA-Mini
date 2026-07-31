@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { onMounted, reactive, ref } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { api, asList, errorMessage, unwrap } from '../api/client'
 import AppPagination from '../components/AppPagination.vue'
 import PageState from '../components/PageState.vue'
@@ -11,7 +11,6 @@ import { useMutationAction } from '../composables/useMutationAction'
 
 type DocumentRow = components['schemas']['DocVO']
 type DocumentVersion = Record<string, unknown>
-type Space = components['schemas']['SpaceVO']
 const mutation = useMutationAction()
 
 const rows = ref<DocumentRow[]>([]),
@@ -31,10 +30,7 @@ const {
 const dialog = ref(false),
   versionsDialog = ref(false),
   file = ref<File>(),
-  mode = ref<'file' | 'text'>('file'),
-  spaces = ref<Space[]>([]),
-  spacesLoading = ref(false)
-const activeSpaces = computed(() => spaces.value.filter((s) => s.status === 'active'))
+  mode = ref<'file' | 'text'>('file')
 const filters = reactive({ title: '', spaceCode: '', parseStatus: '' })
 const form = reactive({
   spaceCode: 'default',
@@ -75,25 +71,6 @@ async function load(reset = false) {
     loading.value = false
   }
 }
-async function loadSpaces() {
-  spacesLoading.value = true
-  try {
-    const result = readServerPage<Space>(
-      await unwrap(
-        api.GET('/api/v1/spaces/page', {
-          params: { query: { pageNum: 1, pageSize: 100 } },
-        }),
-      ),
-      1,
-      100,
-    )
-    spaces.value = result.items
-  } catch (e: unknown) {
-    ElMessage.error(errorMessage(e, '无法读取知识空间'))
-  } finally {
-    spacesLoading.value = false
-  }
-}
 function openIngest() {
   mode.value = 'file'
   file.value = undefined
@@ -105,7 +82,6 @@ function openIngest() {
     sourceTag: 'manual',
     sourceVersion: 1,
   })
-  loadSpaces()
   dialog.value = true
 }
 async function ingest() {
@@ -281,21 +257,7 @@ onMounted(load)
     <el-form label-position="top"
       ><el-row :gutter="12"
         ><el-col :span="12"
-          ><el-form-item label="知识空间"
-            ><el-select
-              v-model="form.spaceCode"
-              placeholder="请选择知识空间"
-              :loading="spacesLoading"
-              filterable
-              clearable
-              style="width: 100%"
-            >
-              <el-option
-                v-for="space in activeSpaces"
-                :key="space.spaceCode"
-                :label="`${space.name || space.spaceCode} (${space.spaceCode})`"
-                :value="space.spaceCode"
-              /> </el-select></el-form-item></el-col
+          ><el-form-item label="知识空间"><SpaceSelect v-model="form.spaceCode" style="width: 100%" /></el-form-item></el-col
         ><el-col :span="12"
           ><el-form-item label="业务引用"
             ><el-input

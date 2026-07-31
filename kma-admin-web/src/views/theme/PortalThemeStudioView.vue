@@ -518,7 +518,6 @@ onBeforeUnmount(() => editorInstance?.dispose())
       <div class="toolbar-group toolbar-group--identity">
         <el-button text class="return-console" @click="returnToConsole">← 返回后台管理</el-button>
         <div class="studio-title">
-          <span>全站主题工作台</span>
           <el-tag :type="dirty ? 'warning' : 'success'" size="small">
             {{ dirty ? '未保存' : `V${workspace?.version.versionNo || '-'}` }}
           </el-tag>
