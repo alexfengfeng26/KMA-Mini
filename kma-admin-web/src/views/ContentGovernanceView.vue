@@ -105,9 +105,10 @@ const form = reactive<ContentForm>({
 })
 const reviewMode = computed(() => route.meta.governanceMode === 'review')
 const publicationMode = computed(() => route.meta.governanceMode === 'publication')
-const hasGovernanceSignals = computed(() =>
-  Object.keys(governanceInsights.value).length > 0 &&
-  Object.values(governanceInsights.value).some((v) => (v as number) > 0),
+const hasGovernanceSignals = computed(
+  () =>
+    Object.keys(governanceInsights.value).length > 0 &&
+    Object.values(governanceInsights.value).some((v) => (v as number) > 0),
 )
 const cleanFormSnapshot = ref('')
 const currentFormSnapshot = computed(() =>
@@ -145,6 +146,9 @@ async function load(reset = false) {
   } else if (publicationMode.value) {
     filters.workflowStatus = ''
     filters.reviewDecision = 'approved'
+  } else {
+    filters.workflowStatus = ''
+    filters.reviewDecision = ''
   }
   try {
     const result = await getAdminContents({
@@ -481,7 +485,8 @@ watch(
         ><el-option label="草稿" value="draft" /><el-option label="审核中" value="reviewing" /><el-option
           label="已发布"
           value="published" /></el-select
-      ><SpaceSelect v-model="filters.spaceCode" placeholder="空间编码" clearable /><el-button @click="load(true)"
+      ><SpaceSelect v-model="filters.spaceCode" placeholder="空间编码" clearable /><el-button
+        @click="load(true)"
         >查询</el-button
       >
     </div>
