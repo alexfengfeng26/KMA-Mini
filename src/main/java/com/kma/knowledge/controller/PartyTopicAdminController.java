@@ -32,6 +32,14 @@ public class PartyTopicAdminController {
     @PreAuthorize("@ss.hasPermi('topic:manage')")
     public ApiResult<Long> update(@PathVariable Long id,@Valid @RequestBody TopicRequest request){return ApiResult.success(service.saveTopic(id,request));}
 
+    @DeleteMapping("/topics/{id}")
+    @PreAuthorize("@ss.hasPermi('topic:manage')")
+    public ApiResult<Void> delete(@PathVariable Long id){service.deleteTopic(id);return ApiResult.success();}
+
+    @PostMapping("/topics/reorder")
+    @PreAuthorize("@ss.hasPermi('topic:manage')")
+    public ApiResult<Void> reorder(@RequestBody List<Map<String,Object>> order){service.reorderTopics(order);return ApiResult.success();}
+
     @GetMapping("/portal-config")
     @PreAuthorize("@ss.hasPermi('content:read')")
     public ApiResult<Map<String,Object>> config(){return ApiResult.success(service.config());}

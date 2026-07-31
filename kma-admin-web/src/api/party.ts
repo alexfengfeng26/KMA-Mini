@@ -40,6 +40,8 @@ export interface PortalTopic {
   sortOrder?: number
   enabled?: boolean
   featured?: boolean
+  systemTopic?: boolean
+  contentCount?: number
 }
 
 export interface PortalListItem {
@@ -87,6 +89,8 @@ function toTopic(value: unknown): PortalTopic {
     sortOrder: numberValue(record, 'sortOrder', 'sort_order'),
     enabled: record.enabled === undefined ? undefined : Boolean(record.enabled),
     featured: record.featured === undefined ? undefined : Boolean(record.featured),
+    systemTopic: record.system_topic === undefined ? undefined : Boolean(record.system_topic),
+    contentCount: numberValue(record, 'contentCount', 'content_count'),
   }
 }
 
@@ -284,6 +288,18 @@ export function createTopic(body: TopicRequest) {
 
 export function updateTopic(id: number, body: TopicRequest) {
   return unwrap(api.PUT('/api/v1/admin/topics/{id}', { params: { path: { id } }, body }))
+}
+
+export function deleteTopic(id: number) {
+  return authorizedJson<void>(`/api/v1/admin/topics/${id}`, { method: 'DELETE' })
+}
+
+export function reorderTopics(order: { topicId: number; sortOrder: number }[]) {
+  return authorizedJson<void>('/api/v1/admin/topics/reorder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(order),
+  })
 }
 
 export async function getPortalConfig(): Promise<PortalConfig> {

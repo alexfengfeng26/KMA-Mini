@@ -303,8 +303,15 @@ public class PartyKnowledgeService {
     }
 
     public List<Map<String, Object>> topics(boolean portalOnly) {
-        String sql = "SELECT topic_id,topic_code,name,description,cover_color,sort_order,enabled,featured,system_topic,parent_topic_id,topic_type,icon,slug,display_mode FROM knowledge_topic WHERE TRUE"
-            + (portalOnly ? " AND enabled=TRUE" : "") + " ORDER BY sort_order,topic_id";
+        String sql = """
+            SELECT t.topic_id, t.topic_code, t.name, t.description, t.cover_color, t.sort_order,
+                   t.enabled, t.featured, t.system_topic, t.parent_topic_id, t.topic_type, t.icon,
+                   t.slug, t.display_mode, COALESCE(c.total,0) AS content_count
+            FROM knowledge_topic t
+            LEFT JOIN (SELECT topic_id, count(*) AS total FROM knowledge_doc_topic GROUP BY topic_id) c
+              ON c.topic_id = t.topic_id
+            WHERE TRUE"""
+            + (portalOnly ? " AND t.enabled=TRUE" : "") + " ORDER BY t.sort_order,t.topic_id";
         return knowledgeJdbcTemplate.queryForList(sql);
     }
 
@@ -335,6 +342,40 @@ public class PartyKnowledgeService {
         auditService.recordRequired("content_configuration", "info", "topic.update", "topic:"+id,
             before,topicAuditSnapshot(request),Map.of());
         return id;
+    }
+
+    @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
+    public void deleteTopic(Long id) {
+        Map<String,Object> row = knowledgeJdbcTemplate.queryForMap(
+            "SELECT system_topic FROM knowledge_topic WHERE topic_id=?", id);
+        if (Boolean.TRUE.equals(row.get("system_topic"))) {
+            throw new KmaException(403, "SYSTEM_TOPIC_CANNOT_DELETE");
+        }
+        Integer contentCount = knowledgeJdbcTemplate.queryForObject(
+            "SELECT count(*) FROM knowledge_doc_topic WHERE topic_id=?", Integer.class, id);
+        if (contentCount != null && contentCount > 0) {
+            throw new KmaException(409, "TOPIC_HAS_CONTENT");
+        }
+        Integer childCount = knowledgeJdbcTemplate.queryForObject(
+            "SELECT count(*) FROM knowledge_topic WHERE parent_topic_id=?", Integer.class, id);
+        if (childCount != null && childCount > 0) {
+            throw new KmaException(409, "TOPIC_HAS_CHILDREN");
+        }
+        knowledgeJdbcTemplate.update("DELETE FROM knowledge_topic WHERE topic_id=?", id);
+        auditService.recordRequired("content_configuration", "warning", "topic.delete", "topic:"+id,
+            Map.of("topicId", id), Map.of(), Map.of());
+    }
+
+    @Transactional(transactionManager = "knowledgeTransactionManager", rollbackFor = Exception.class)
+    public void reorderTopics(List<Map<String, Object>> order) {
+        for (Map<String, Object> item : order) {
+            Number id = (Number) item.get("topicId");
+            Number sortOrder = (Number) item.get("sortOrder");
+            if (id == null || sortOrder == null) continue;
+            knowledgeJdbcTemplate.update(
+                "UPDATE knowledge_topic SET sort_order=?,update_time=now() WHERE topic_id=?",
+                sortOrder.intValue(), id.longValue());
+        }
     }
 
     private void validateTopicParent(Long topicId,Long parentTopicId){
