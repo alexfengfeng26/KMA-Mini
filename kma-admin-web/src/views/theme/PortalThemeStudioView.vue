@@ -44,6 +44,13 @@ const aiLoading = ref(false)
 const aiInstruction = ref('')
 const aiProposal = ref<PortalThemeDesignProposal>()
 const aiUndoFiles = ref<Record<string, string>>()
+const originalFiles = ref<Record<string, string>>({})
+const filePanelCollapsed = ref(false)
+const previewPanelCollapsed = ref(false)
+const fileQuery = ref('')
+const addFileDialog = ref(false)
+const newFileType = ref<'html' | 'css' | 'js' | 'json'>('html')
+const newFileName = ref('')
 const editorHost = ref<HTMLElement>()
 const zipInput = ref<HTMLInputElement>()
 const previewBootstrap = ref<PortalBootstrap>()
@@ -74,6 +81,26 @@ const fileTree = computed(() => {
     })
   return [...groups].map(([label, children]) => ({ label, children }))
 })
+const filteredFileTree = computed(() => {
+  const q = fileQuery.value.trim().toLowerCase()
+  if (!q) return fileTree.value
+  return fileTree.value
+    .map((group) => ({
+      ...group,
+      children: group.children.filter((child) => child.path.toLowerCase().includes(q)),
+    }))
+    .filter((group) => group.children.length)
+})
+function fileIconClass(path: string) {
+  if (path.endsWith('.html')) return 'file-icon file-icon--html'
+  if (path.endsWith('.css')) return 'file-icon file-icon--css'
+  if (path.endsWith('.js')) return 'file-icon file-icon--js'
+  if (path.endsWith('.json')) return 'file-icon file-icon--json'
+  return 'file-icon file-icon--text'
+}
+function isFileDirty(path: string) {
+  return path in files && files[path] !== (originalFiles.value[path] ?? files[path])
+}
 const issues = computed(() => workspace.value?.version.scanResult?.issues || [])
 const portalStatus = computed(() => workspace.value?.portalVersion.status || 'draft')
 const selectedTheme = computed(() =>
@@ -141,6 +168,9 @@ async function mountEditor() {
     files[activePath.value] = editorInstance.getValue()
     dirty.value = true
   })
+  editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+    void save()
+  })
 }
 
 function openFile(path: string) {
@@ -195,6 +225,7 @@ async function loadWorkspace() {
     const result = await getPortalThemeWorkspace(siteKey.value, selectedThemeKey.value || undefined)
     workspace.value = result
     replaceFiles(result.files)
+    originalFiles.value = { ...result.files }
     dirty.value = false
     await loadPreview()
   } catch (error) {
@@ -232,6 +263,7 @@ async function applyTheme() {
     const result = await applyPortalTheme(siteKey.value, current.version.themeVersionId)
     workspace.value = result
     replaceFiles(result.files)
+    originalFiles.value = { ...result.files }
     dirty.value = false
     await loadThemeCatalog()
     await loadPreview()
@@ -290,6 +322,7 @@ async function publishImmediately() {
     })
     workspace.value = result
     replaceFiles(result.files)
+    originalFiles.value = { ...result.files }
     dirty.value = false
     await loadThemeCatalog()
     await loadPreview()
@@ -334,6 +367,7 @@ async function save() {
       expectedLockVersion: current.version.lockVersion,
     })
     workspace.value = result
+    originalFiles.value = { ...files }
     dirty.value = false
     await loadThemeCatalog()
     await loadPreview()
@@ -431,15 +465,39 @@ function undoAiProposal() {
   ElMessage.success('已撤销最近一次 AI 主题提案')
 }
 
-async function addFile() {
-  const result = await ElMessageBox.prompt('相对路径，例如 partials/hero.html', '新增主题文件', {
-    inputPattern: /^(?:pages|partials|styles|scripts|assets)\/[a-zA-Z0-9._/-]+$/,
-    inputErrorMessage: '文件必须位于允许的主题目录内',
-  })
-  const path = result.value.trim()
-  if (path in files) return ElMessage.warning('文件已存在')
-  files[path] = path.endsWith('.html') ? '<section class="theme-section">新区域</section>' : ''
+const fileTemplates: Record<string, string> = {
+  html: '<section class="theme-section">\n  <!-- 新区域 -->\n</section>\n',
+  css: '/* 新增样式 */\n',
+  js: '// 新增脚本\n',
+  json: '{}\n',
+}
+const fileTypeFolders: Record<string, string> = {
+  html: 'partials',
+  css: 'styles',
+  js: 'scripts',
+  json: 'assets',
+}
+
+function openAddFileDialog() {
+  newFileType.value = 'html'
+  newFileName.value = ''
+  addFileDialog.value = true
+}
+
+function confirmAddFile() {
+  const name = newFileName.value.trim()
+  if (!name) return ElMessage.warning('请输入文件名')
+  const folder = fileTypeFolders[newFileType.value]
+  const ext = newFileType.value === 'html' ? '.html' : newFileType.value === 'css' ? '.css' : newFileType.value === 'js' ? '.js' : '.json'
+  const base = name.endsWith(ext) ? name : `${name}${ext}`
+  const path = `${folder}/${base}`
+  if (path in files) {
+    ElMessage.warning('文件已存在')
+    return
+  }
+  files[path] = fileTemplates[newFileType.value]
   dirty.value = true
+  addFileDialog.value = false
   openFile(path)
 }
 
@@ -483,6 +541,7 @@ async function importZip(event: Event) {
     )
     workspace.value = result
     replaceFiles(result.files)
+    originalFiles.value = { ...result.files }
     dirty.value = false
     await loadPreview()
     ElMessage.success('ZIP 主题已导入草稿并完成安全扫描')
@@ -516,7 +575,7 @@ onBeforeUnmount(() => editorInstance?.dispose())
   <div class="theme-studio" v-loading="loading">
     <header class="studio-toolbar">
       <div class="toolbar-group toolbar-group--identity">
-        <el-button text class="return-console" @click="returnToConsole">← 返回后台管理</el-button>
+        <el-button text size="small" class="return-console" @click="returnToConsole">← 返回后台管理</el-button>
         <div class="studio-title">
           <el-tag :type="dirty ? 'warning' : 'success'" size="small">
             {{ dirty ? '未保存' : `V${workspace?.version.versionNo || '-'}` }}
@@ -566,11 +625,11 @@ onBeforeUnmount(() => editorInstance?.dispose())
       </div>
 
       <div class="toolbar-group toolbar-group--actions">
-        <el-button type="warning" plain @click="aiOpen = true">AI 设计整站</el-button>
-        <el-button v-if="aiUndoFiles" @click="undoAiProposal">撤销 AI</el-button>
-        <el-button :loading="saving" @click="save">保存草稿</el-button>
+        <el-button size="small" type="warning" plain @click="aiOpen = true">AI 设计整站</el-button>
+        <el-button size="small" :loading="saving" @click="save">保存草稿</el-button>
         <el-button
           v-if="canDirectPublish"
+          size="small"
           type="primary"
           :loading="publishing"
           :disabled="!workspace"
@@ -578,11 +637,12 @@ onBeforeUnmount(() => editorInstance?.dispose())
         >
           {{ localSourceChanged && !dirty ? '同步并立即发布' : '立即发布' }}
         </el-button>
-        <el-button v-else-if="portalStatus === 'draft'" type="primary" @click="act('submit')">
+        <el-button v-else-if="portalStatus === 'draft'" size="small" type="primary" @click="act('submit')">
           保存并送审
         </el-button>
         <el-button
           v-else-if="portalStatus === 'reviewing' && !workspace?.portalVersion.reviewedAt"
+          size="small"
           type="primary"
           @click="act('approve')"
         >
@@ -590,6 +650,7 @@ onBeforeUnmount(() => editorInstance?.dispose())
         </el-button>
         <el-button
           v-else-if="portalStatus === 'reviewing' && workspace?.portalVersion.reviewedAt"
+          size="small"
           type="primary"
           @click="act('publish')"
         >
@@ -613,6 +674,7 @@ onBeforeUnmount(() => editorInstance?.dispose())
           <el-button size="small"> 操作 ▼ </el-button>
           <template #dropdown>
             <el-dropdown-menu>
+              <el-dropdown-item v-if="aiUndoFiles" @click="undoAiProposal"> 撤销 AI </el-dropdown-item>
               <el-dropdown-item @click="previewSaved"> 真实预览 </el-dropdown-item>
               <el-dropdown-item :disabled="refreshingThemeStatus" @click="refreshThemeStatus">
                 刷新本地状态
@@ -632,30 +694,65 @@ onBeforeUnmount(() => editorInstance?.dispose())
       </div>
     </header>
 
-    <section class="studio-grid">
-      <aside class="file-panel">
+    <section
+      class="studio-grid"
+      :class="{
+        'studio-grid--file-collapsed': filePanelCollapsed,
+        'studio-grid--preview-collapsed': previewPanelCollapsed,
+      }"
+    >
+      <aside class="file-panel" :class="{ 'file-panel--collapsed': filePanelCollapsed }">
         <div class="panel-heading">
-          <span>主题文件</span>
-          <el-button-group>
-            <el-button size="small" @click="addFile">＋</el-button>
+          <span v-if="!filePanelCollapsed">主题文件</span>
+          <span v-else class="panel-heading__rotated">文件</span>
+          <el-button-group v-if="!filePanelCollapsed">
+            <el-button size="small" @click="openAddFileDialog">＋</el-button>
             <el-button size="small" @click="renameFile">改</el-button>
             <el-button size="small" @click="removeFile">删</el-button>
           </el-button-group>
+          <el-button
+            text
+            size="small"
+            class="collapse-btn"
+            :title="filePanelCollapsed ? '展开文件面板' : '收起文件面板'"
+            @click="filePanelCollapsed = !filePanelCollapsed"
+          >
+            {{ filePanelCollapsed ? '→' : '←' }}
+          </el-button>
         </div>
-        <el-tree
-          :data="fileTree"
-          node-key="path"
-          default-expand-all
-          :expand-on-click-node="false"
-          @node-click="(node: { path?: string }) => node.path && openFile(node.path)"
-        />
-        <div class="tag-guide">
-          <strong>KMA 标签</strong>
-          <code>&lt;kma-slot name="content" /&gt;</code>
-          <code>&lt;kma-widget name="content-list" /&gt;</code>
-          <code>&lt;kma-widget name="ai-chat" /&gt;</code>
-          <code>&lt;kma-link to="library"&gt;</code>
-        </div>
+        <template v-if="!filePanelCollapsed">
+          <el-input
+            v-model="fileQuery"
+            size="small"
+            placeholder="搜索文件"
+            clearable
+            class="file-search"
+          />
+          <el-tree
+            :data="filteredFileTree"
+            node-key="path"
+            :current-node-key="activePath"
+            default-expand-all
+            highlight-current
+            :expand-on-click-node="false"
+            @node-click="(node: { path?: string }) => node.path && openFile(node.path)"
+          >
+            <template #default="{ node, data }">
+              <span v-if="data.path" class="file-tree-node" :class="{ 'is-dirty': isFileDirty(data.path) }">
+                <span :class="fileIconClass(data.path)" />
+                <span class="file-tree-label">{{ node.label }}</span>
+              </span>
+              <span v-else class="file-tree-group">{{ node.label }}</span>
+            </template>
+          </el-tree>
+          <div class="tag-guide">
+            <strong>KMA 标签</strong>
+            <code>&lt;kma-slot name="content" /&gt;</code>
+            <code>&lt;kma-widget name="content-list" /&gt;</code>
+            <code>&lt;kma-widget name="ai-chat" /&gt;</code>
+            <code>&lt;kma-link to="library"&gt;</code>
+          </div>
+        </template>
       </aside>
 
       <main class="editor-panel">
@@ -666,25 +763,37 @@ onBeforeUnmount(() => editorInstance?.dispose())
         <div ref="editorHost" class="monaco-host" />
       </main>
 
-      <aside class="preview-panel">
+      <aside class="preview-panel" :class="{ 'preview-panel--collapsed': previewPanelCollapsed }">
         <div class="panel-heading preview-heading">
-          <span>即时全站预览</span>
-          <el-button-group>
+          <span v-if="!previewPanelCollapsed">即时全站预览</span>
+          <span v-else class="panel-heading__rotated">预览</span>
+          <el-button-group v-if="!previewPanelCollapsed">
             <el-button size="small" @click="previewWidth = 1440">桌面</el-button>
             <el-button size="small" @click="previewWidth = 1024">平板</el-button>
             <el-button size="small" @click="previewWidth = 390">手机</el-button>
           </el-button-group>
+          <el-button
+            text
+            size="small"
+            class="collapse-btn"
+            :title="previewPanelCollapsed ? '展开预览面板' : '收起预览面板'"
+            @click="previewPanelCollapsed = !previewPanelCollapsed"
+          >
+            {{ previewPanelCollapsed ? '←' : '→' }}
+          </el-button>
         </div>
-        <el-slider v-model="previewWidth" :min="320" :max="1920" :step="10" show-input />
-        <div class="preview-stage">
-          <iframe
-            :srcdoc="previewSource"
-            :style="{ width: `${previewWidth}px` }"
-            title="未保存主题即时预览"
-            sandbox="allow-scripts"
-            referrerpolicy="no-referrer"
-          />
-        </div>
+        <template v-if="!previewPanelCollapsed">
+          <el-slider v-model="previewWidth" :min="320" :max="1920" :step="10" show-input />
+          <div class="preview-stage">
+            <iframe
+              :srcdoc="previewSource"
+              :style="{ width: `${previewWidth}px` }"
+              title="未保存主题即时预览"
+              sandbox="allow-scripts"
+              referrerpolicy="no-referrer"
+            />
+          </div>
+        </template>
       </aside>
     </section>
 
@@ -694,6 +803,27 @@ onBeforeUnmount(() => editorInstance?.dispose())
       <span v-for="issue in issues" v-else :key="issue" class="issue">{{ issue }}</span>
       <span class="policy">CSP connect-src 'none' · SDK 能力二次授权 · 默认 HTML 转义</span>
     </footer>
+
+    <el-dialog v-model="addFileDialog" title="新增主题文件" width="420px">
+      <el-form label-position="top">
+        <el-form-item label="文件类型">
+          <el-radio-group v-model="newFileType">
+            <el-radio-button label="html">HTML Partial</el-radio-button>
+            <el-radio-button label="css">CSS</el-radio-button>
+            <el-radio-button label="js">JS</el-radio-button>
+            <el-radio-button label="json">JSON</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="文件名">
+          <el-input v-model="newFileName" placeholder="例如 hero" clearable @keyup.enter="confirmAddFile" />
+          <small class="form-hint">将自动保存到 {{ fileTypeFolders[newFileType] }}/ 目录</small>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="addFileDialog = false">取消</el-button>
+        <el-button type="primary" @click="confirmAddFile">创建</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="aiOpen" title="DeepSeek V4 Flash · 整站主题 AI" width="720px">
       <p class="ai-note">
@@ -738,7 +868,7 @@ onBeforeUnmount(() => editorInstance?.dispose())
   z-index: 80;
   inset: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) 44px;
+  grid-template-rows: auto minmax(0, 1fr) 36px;
   color: #d8e2ef;
   background: #0d1420;
 }
@@ -748,21 +878,21 @@ onBeforeUnmount(() => editorInstance?.dispose())
 .studio-diagnostics {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border-color: #283448;
   background: #121c2a;
 }
 
 .studio-toolbar {
-  min-height: 54px;
-  padding: 8px 16px;
+  min-height: 38px;
+  padding: 4px 10px;
   border-bottom: 1px solid #283448;
 }
 
 .toolbar-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -887,6 +1017,18 @@ onBeforeUnmount(() => editorInstance?.dispose())
   min-height: 0;
 }
 
+.studio-grid--file-collapsed {
+  grid-template-columns: 44px minmax(360px, 1fr) minmax(420px, 46vw);
+}
+
+.studio-grid--preview-collapsed {
+  grid-template-columns: 230px minmax(360px, 1fr) 44px;
+}
+
+.studio-grid--file-collapsed.studio-grid--preview-collapsed {
+  grid-template-columns: 44px minmax(360px, 1fr) 44px;
+}
+
 .file-panel,
 .editor-panel,
 .preview-panel {
@@ -898,14 +1040,86 @@ onBeforeUnmount(() => editorInstance?.dispose())
   background: #111a27;
 }
 
+.file-panel--collapsed,
+.preview-panel--collapsed {
+  overflow: hidden;
+}
+
 .panel-heading {
-  min-height: 42px;
-  padding: 0 12px;
+  min-height: 32px;
+  padding: 0 8px;
   border-bottom: 1px solid #283448;
 }
 
 .panel-heading > span:first-child {
   margin-right: auto;
+}
+
+.panel-heading__rotated {
+  margin: 0;
+  color: #8290a6;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+.collapse-btn {
+  flex: 0 0 auto;
+  padding: 4px 6px;
+  color: #8290a6;
+}
+
+.file-panel--collapsed .panel-heading,
+.preview-panel--collapsed .panel-heading {
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.file-search {
+  margin: 6px 8px 0;
+}
+
+.file-tree-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.file-tree-group {
+  font-weight: 600;
+  color: #d8e2ef;
+}
+
+.file-tree-node.is-dirty .file-tree-label::after {
+  content: '*';
+  margin-left: 4px;
+  color: #f2c97d;
+}
+
+.file-icon {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #8290a6;
+}
+
+.file-icon--html {
+  background: #e44d26;
+}
+
+.file-icon--css {
+  background: #264de4;
+}
+
+.file-icon--js {
+  background: #f7df1e;
+}
+
+.file-icon--json {
+  background: #6dd8a4;
 }
 
 .file-panel :deep(.el-tree) {
@@ -935,6 +1149,13 @@ onBeforeUnmount(() => editorInstance?.dispose())
   text-overflow: ellipsis;
 }
 
+.form-hint {
+  display: block;
+  margin-top: 4px;
+  color: #8290a6;
+  font-size: 12px;
+}
+
 .monaco-host {
   min-height: 0;
   flex: 1;
@@ -955,7 +1176,7 @@ onBeforeUnmount(() => editorInstance?.dispose())
   overflow: auto;
   min-height: 0;
   flex: 1;
-  padding: 18px;
+  padding: 10px;
   text-align: center;
   background:
     linear-gradient(45deg, #202c3c 25%, transparent 25%) 0 0 / 16px 16px,
@@ -976,7 +1197,7 @@ onBeforeUnmount(() => editorInstance?.dispose())
 
 .studio-diagnostics {
   overflow-x: auto;
-  padding: 0 16px;
+  padding: 0 12px;
   border-top: 1px solid #283448;
   font-size: 12px;
   white-space: nowrap;
@@ -1028,10 +1249,18 @@ onBeforeUnmount(() => editorInstance?.dispose())
     grid-template-columns: 190px minmax(340px, 1fr);
   }
 
+  .studio-grid--file-collapsed {
+    grid-template-columns: 44px minmax(340px, 1fr);
+  }
+
   .preview-panel {
     position: absolute;
     z-index: 2;
-    inset: 96px 0 44px 55%;
+    inset: 46px 0 44px 55%;
+  }
+
+  .studio-grid--preview-collapsed .preview-panel {
+    display: none;
   }
 }
 </style>

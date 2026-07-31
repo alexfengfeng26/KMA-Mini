@@ -18,6 +18,13 @@ const STAGES: { key: StageKey; label: string }[] = [
   { key: 'rerank', label: '重排结果' },
 ]
 
+const STAGE_META: Record<StageKey, { color: string; hint: string }> = {
+  final: { color: 'var(--el-color-primary)', hint: '经 RRF 融合与重排后返回的最终结果' },
+  vector: { color: '#e6a23c', hint: '仅由向量相似度召回的原始结果' },
+  fullText: { color: '#67c23a', hint: '仅由全文检索召回的原始结果' },
+  rerank: { color: '#f56c6c', hint: '经重排模型打分后的结果' },
+}
+
 const form = reactive({ spaceCode: 'default', query: '', topK: 8 })
 const loading = ref(false)
 const result = ref<RetrieveDebugResult>()
@@ -164,11 +171,19 @@ async function run() {
         <div class="hit-card__header">
           <span class="hit-rank">#{{ (page - 1) * pageSize + index + 1 }}</span>
           <div class="hit-source">
-            <strong>{{ hit.docTitle || '未命名文档' }}</strong>
+            <div class="hit-source__title">
+              <strong>{{ hit.docTitle || '未命名文档' }}</strong>
+              <el-tag v-if="hit.chunkIndex !== undefined" size="small" type="warning" effect="plain">
+                第 {{ hit.chunkIndex + 1 }} 段
+              </el-tag>
+              <el-tag v-if="hit.section" size="small" type="info" effect="plain">{{ hit.section }}</el-tag>
+            </div>
             <div class="hit-source__meta">
               <el-tag v-if="hit.sourceTag" size="small">{{ hit.sourceTag }}</el-tag>
               <el-tag v-if="hit.documentNumber" size="small" type="info">{{ hit.documentNumber }}</el-tag>
-              <el-tag v-if="hit.externalRef" size="small" type="success">{{ hit.externalRef }}</el-tag>
+              <el-tag v-if="hit.externalRef" size="small" type="success" effect="plain" title="外部引用">
+                {{ hit.externalRef.slice(0, 16) }}{{ hit.externalRef.length > 16 ? '…' : '' }}
+              </el-tag>
               <span v-if="hit.issuingAuthority" class="meta-text">{{ hit.issuingAuthority }}</span>
             </div>
           </div>
@@ -188,20 +203,32 @@ async function run() {
         </div>
         <div class="hit-card__footer">
           <div class="score-bars">
-            <div v-if="hit.rrfScore !== undefined" class="score-bar">
+            <div v-if="hit.rrfScore !== undefined" class="score-bar" title="RRF 融合分数：综合向量与全文召回的排序分数">
               <span class="score-label">RRF</span>
               <el-progress :percentage="Math.round((hit.rrfScore ?? 0) * 100)" :show-text="false" />
               <span class="score-value">{{ formatScore(hit.rrfScore) }}</span>
             </div>
-            <div v-if="hit.rerankScore !== undefined" class="score-bar">
+            <div v-if="hit.rerankScore !== undefined" class="score-bar" title="重排模型分数：由重排模型给出的相关性分数">
               <span class="score-label">重排</span>
               <el-progress :percentage="Math.round((hit.rerankScore ?? 0) * 100)" :show-text="false" />
               <span class="score-value">{{ formatScore(hit.rerankScore) }}</span>
             </div>
           </div>
           <div class="score-tags">
-            <el-tag size="small" type="info">向量 {{ formatScore(hit.vectorScore) }}</el-tag>
-            <el-tag size="small" type="info">全文 {{ formatScore(hit.fullTextScore) }}</el-tag>
+            <el-tooltip content="向量相似度分数">
+              <el-tag size="small" type="info" effect="plain">向量 {{ formatScore(hit.vectorScore) }}</el-tag>
+            </el-tooltip>
+            <el-tooltip content="全文检索分数（BM25）">
+              <el-tag size="small" type="info" effect="plain">全文 {{ formatScore(hit.fullTextScore) }}</el-tag>
+            </el-tooltip>
+            <el-tag
+              v-if="hit.sourceStage"
+              size="small"
+              effect="plain"
+              :style="{ color: STAGE_META[hit.sourceStage as StageKey]?.color, borderColor: STAGE_META[hit.sourceStage as StageKey]?.color }"
+            >
+              来源：{{ STAGES.find((s) => s.key === hit.sourceStage)?.label || hit.sourceStage }}
+            </el-tag>
           </div>
         </div>
       </div>
@@ -327,9 +354,15 @@ async function run() {
   min-width: 0;
 }
 
-.hit-source strong {
-  display: block;
-  margin-bottom: 4px;
+.hit-source__title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.hit-source__title strong {
   font-size: 15px;
 }
 

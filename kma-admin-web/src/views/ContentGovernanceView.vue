@@ -105,6 +105,10 @@ const form = reactive<ContentForm>({
 })
 const reviewMode = computed(() => route.meta.governanceMode === 'review')
 const publicationMode = computed(() => route.meta.governanceMode === 'publication')
+const hasGovernanceSignals = computed(() =>
+  Object.keys(governanceInsights.value).length > 0 &&
+  Object.values(governanceInsights.value).some((v) => (v as number) > 0),
+)
 const cleanFormSnapshot = ref('')
 const currentFormSnapshot = computed(() =>
   JSON.stringify({
@@ -428,7 +432,7 @@ watch(
         >
       </template>
     </PageHeader>
-    <div v-if="Object.keys(governanceInsights).length" class="governance-signals">
+    <div v-if="hasGovernanceSignals" class="governance-signals">
       <div
         v-for="(label, key) in {
           scheduledOnline: '待上线',
@@ -442,6 +446,7 @@ watch(
         }"
         :key="key"
         class="signal"
+        :class="{ 'signal--zero': !governanceInsights[key] }"
       >
         <span>{{ label }}</span
         ><strong>{{ governanceInsights[key] || 0 }}</strong>
@@ -716,12 +721,12 @@ watch(
 </template>
 <style scoped>
 .panel {
-  padding-top: 12px;
+  padding-top: 8px;
 }
 
 .panel :deep(.page-header) {
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .panel :deep(.page-header h2),
@@ -731,33 +736,57 @@ watch(
 
 .governance-signals {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 6px;
   align-items: center;
-  margin: 0 0 6px;
+  margin: 6px 0 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
 
 .signal {
-  min-width: 88px;
-  padding: 6px 10px;
+  flex: 0 0 auto;
+  min-width: 72px;
+  padding: 4px 8px;
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--el-fill-color-lighter);
+}
+
+.signal--zero {
+  opacity: 0.65;
 }
 
 .signal span {
   display: block;
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
 }
 
 .signal strong {
-  font-size: 18px;
-  line-height: 1.3;
+  font-size: 15px;
+  line-height: 1.25;
 }
 
 .filter-bar {
-  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.filter-bar > * {
+  flex: 0 0 auto;
+}
+
+.filter-bar .el-input,
+.filter-bar .el-select {
+  flex: 1 1 130px;
+  min-width: 130px;
+  max-width: 180px;
 }
 
 .impact-summary {

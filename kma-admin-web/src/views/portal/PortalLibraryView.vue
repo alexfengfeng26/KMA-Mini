@@ -15,6 +15,7 @@ import PortalSystemPageFrame from '../../cms/v3/PortalSystemPageFrame.vue'
 import AppPagination from '../../components/AppPagination.vue'
 import PageState from '../../components/PageState.vue'
 import StatusTag from '../../components/StatusTag.vue'
+import SpaceSelect from '../../components/SpaceSelect.vue'
 import { categoryLabel, PARTY_CONTENT_CATEGORIES } from '../../domain/partyKnowledge'
 import { useSiteNavigation } from '../../composables/useSiteNavigation'
 
@@ -234,7 +235,7 @@ onBeforeUnmount(() => controller?.abort())
             <el-option label="已废止" value="repealed" />
           </el-select>
         </label>
-        <label>知识空间<el-input v-model="filters.spaceCode" placeholder="空间编码" /></label>
+        <label>知识空间<SpaceSelect v-model="filters.spaceCode" placeholder="选择知识空间" clearable /></label>
         <el-checkbox v-model="filters.includeHistorical">包含历史失效资料</el-checkbox>
         <el-button type="primary" :loading="loading" @click="applyFilters(true)">应用筛选</el-button>
         <el-button :disabled="loading" @click="resetFilters">重置筛选</el-button>
