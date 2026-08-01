@@ -12,8 +12,9 @@ public class UserCreateRequest {
     private String username;
     @Size(max = 128)
     private String displayName;
-    @NotBlank @Size(min = 12, max = 256)
+    @Size(min = 12, max = 256)
     private String initialPassword;
+    private boolean generatePassword;
     @Size(max = 20)
     private List<@Size(max = 64) String> roles = List.of();
 }

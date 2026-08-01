@@ -4,6 +4,7 @@ import com.kma.common.result.ApiResult;
 import com.kma.common.result.PageResult;
 import com.kma.common.exception.KmaException;
 import com.kma.common.security.dto.ResetPasswordRequest;
+import com.kma.common.security.dto.UserBatchStatusRequest;
 import com.kma.common.security.dto.UserCreateRequest;
 import com.kma.common.security.dto.RoleUpsertRequest;
 import com.kma.common.security.dto.UserRolesRequest;
@@ -53,15 +54,37 @@ public class UserAdminController {
         @RequestParam(defaultValue = "1") @Min(1) int pageNum,
         @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize,
         @RequestParam(defaultValue = "") String keyword,
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) String roleCode,
+        @RequestParam(required = false) Long orgId,
         @RequestParam(defaultValue = "createTime") String sortBy,
         @RequestParam(defaultValue = "desc") String sortOrder) {
-        return ApiResult.success(userAdminService.page(pageNum, pageSize, keyword, sortBy, sortOrder));
+        return ApiResult.success(userAdminService.page(pageNum, pageSize, keyword, status, roleCode, orgId, sortBy, sortOrder));
+    }
+
+    @GetMapping("/{userId}")
+    @PreAuthorize("@ss.hasPermi('user:read')")
+    public ApiResult<Map<String, Object>> detail(@PathVariable Long userId) {
+        return ApiResult.success(userAdminService.detail(userId));
     }
 
     @PostMapping
     @PreAuthorize("@ss.hasPermi('user:create')")
-    public ApiResult<Long> create(@Valid @RequestBody UserCreateRequest request) {
+    public ApiResult<Map<String, Object>> create(@Valid @RequestBody UserCreateRequest request) {
         return ApiResult.success(userAdminService.create(request));
+    }
+
+    @PutMapping("/batch/status")
+    @PreAuthorize("@ss.hasPermi('user:status:update')")
+    public ApiResult<Void> batchStatus(@Valid @RequestBody UserBatchStatusRequest request) {
+        userAdminService.batchChangeStatus(request.userIds(), request.status());
+        return ApiResult.success();
+    }
+
+    @PostMapping("/batch/reset-password")
+    @PreAuthorize("@ss.hasPermi('user:password:reset')")
+    public ApiResult<Map<String, String>> batchResetPassword(@Valid @RequestBody UserBatchStatusRequest request) {
+        return ApiResult.success(userAdminService.batchResetPassword(request.userIds()));
     }
 
     @PutMapping("/{userId}/status")

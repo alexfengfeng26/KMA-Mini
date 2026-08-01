@@ -231,6 +231,52 @@ public class KmaOrganizationService {
             Map.of(), Map.of("organizationIds", ids), Map.of("authorizationVersionInvalidated", true));
     }
 
+    @Transactional(transactionManager = "knowledgeTransactionManager")
+    public void addMembers(Long orgId, List<Long> userIds, boolean primary) {
+        requireOrg(orgId);
+        for (Long userId : userIds) {
+            requireUser(userId);
+            jdbc.update("""
+                INSERT INTO kma_user_org(user_id,org_id,primary_org) VALUES (?,?,?)
+                ON CONFLICT (user_id,org_id) DO UPDATE SET primary_org=?
+                """, userId, orgId, primary, primary);
+            if (primary) {
+                jdbc.update("UPDATE kma_user_org SET primary_org=FALSE WHERE user_id=? AND org_id<>?", userId, orgId);
+            }
+            jdbc.update("UPDATE kma_user SET auth_version=auth_version+1,update_time=now() WHERE user_id=?", userId);
+        }
+        if (administrationGuard != null) administrationGuard.assertOperationalAdmins();
+        audit.recordRequired("organization_membership_change", "warning", "org.members.add", "org:" + orgId,
+            Map.of(), Map.of("userIds", userIds, "primary", primary), Map.of("authorizationVersionInvalidated", true));
+    }
+
+    @Transactional(transactionManager = "knowledgeTransactionManager")
+    public void removeMember(Long orgId, Long userId) {
+        requireOrg(orgId);
+        requireUser(userId);
+        boolean wasPrimary = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT primary_org FROM kma_user_org WHERE user_id=? AND org_id=?", Boolean.class, userId, orgId));
+        jdbc.update("DELETE FROM kma_user_org WHERE user_id=? AND org_id=?", userId, orgId);
+        Integer remaining = jdbc.queryForObject("SELECT count(*) FROM kma_user_org WHERE user_id=?",
+            Integer.class, userId);
+        if (remaining == null || remaining == 0) {
+            Long rootId = jdbc.queryForObject("""
+                SELECT org_id FROM kma_org WHERE org_code='root' AND status='active'
+                """, Long.class);
+            if (rootId == null) throw new KmaException(500, "根组织不存在或不可用");
+            jdbc.update("INSERT INTO kma_user_org(user_id,org_id,primary_org) VALUES (?,?,TRUE)", userId, rootId);
+        } else if (wasPrimary) {
+            jdbc.update("""
+                UPDATE kma_user_org SET primary_org=TRUE
+                WHERE user_id=? AND org_id=(SELECT org_id FROM kma_user_org WHERE user_id=? LIMIT 1)
+                """, userId, userId);
+        }
+        jdbc.update("UPDATE kma_user SET auth_version=auth_version+1,update_time=now() WHERE user_id=?", userId);
+        if (administrationGuard != null) administrationGuard.assertOperationalAdmins();
+        audit.recordRequired("organization_membership_change", "warning", "org.members.remove", "org:" + orgId,
+            Map.of("userId", userId), Map.of(), Map.of("authorizationVersionInvalidated", true));
+    }
+
     public Set<String> ancestorCodes(Collection<String> directCodes) {
         if (directCodes == null || directCodes.isEmpty()) return Set.of();
         List<String> rows = jdbc.queryForList("""

@@ -59,7 +59,9 @@ public class KmaRoleAdminService {
                 item.put("description", rs.getString("description"));
                 item.put("status", rs.getString("status"));
                 item.put("builtIn", rs.getBoolean("built_in"));
-                item.put("permissions", List.of((String[]) rs.getArray("permissions").getArray()));
+                String[] permissionArray = (String[]) rs.getArray("permissions").getArray();
+                item.put("permissions", List.of(permissionArray));
+                item.put("permissionCount", permissionArray.length);
                 item.put("userCount", rs.getLong("user_count"));
                 item.put("assignable", platformAdmin || !rs.getBoolean("application_admin_role"));
                 return item;
@@ -78,7 +80,7 @@ public class KmaRoleAdminService {
             rs.getString("description"), rs.getInt("sort_order")));
         Map<String, PermissionNode> nodes = new LinkedHashMap<>();
         for (PermissionNodeRow row : rows) nodes.put(row.code(), new PermissionNode(row.code(), row.name(),
-            row.type(), "application", row.description(), row.sortOrder()));
+            row.type(), "application", permissionModule(row.code()), row.description(), row.sortOrder()));
         List<PermissionNode> roots = new ArrayList<>();
         for (PermissionNodeRow row : rows) {
             PermissionNode node = nodes.get(row.code());
@@ -146,6 +148,63 @@ public class KmaRoleAdminService {
             Map.of("roleCode", role.roleCode()), Map.of(), Map.of());
     }
 
+    @Transactional(transactionManager = "knowledgeTransactionManager")
+    public Long clone(Long roleId) {
+        RoleState source = requireRole(roleId);
+        List<Map<String, Object>> sourceRows = jdbc.queryForList("""
+            SELECT name,description,status FROM kma_role WHERE role_id=?
+            """, roleId);
+        Map<String, Object> sourceRow = sourceRows.getFirst();
+        List<String> permissions = jdbc.queryForList("""
+            SELECT permission_code FROM kma_role_permission WHERE role_id=?
+            """, String.class, roleId);
+        String baseCode = source.roleCode().replaceAll("-copy(-\\d+)?$", "");
+        String newCode = baseCode + "-copy";
+        int suffix = 1;
+        while (jdbc.queryForObject("SELECT count(*) FROM kma_role WHERE role_code=?", Integer.class, newCode) > 0) {
+            suffix++;
+            newCode = baseCode + "-copy-" + suffix;
+        }
+        if (newCode.length() > 63) {
+            newCode = newCode.substring(0, 63);
+        }
+        RoleUpsertRequest request = new RoleUpsertRequest();
+        request.setRoleCode(newCode);
+        request.setName(sourceRow.get("name") + " (复制)");
+        request.setDescription((String) sourceRow.get("description"));
+        request.setStatus((String) sourceRow.get("status"));
+        request.setPermissions(new LinkedHashSet<>(permissions));
+        Long newRoleId = create(request);
+        audit.recordRequired("role_change", "info", "role.clone", "role:" + newRoleId,
+            Map.of("sourceRoleId", roleId), Map.of("roleCode", newCode), Map.of());
+        return newRoleId;
+    }
+
+    @Transactional(transactionManager = "knowledgeTransactionManager")
+    public void batchChangeStatus(List<Long> roleIds, String status) {
+        for (Long roleId : roleIds) {
+            RoleState role = requireRole(roleId);
+            if ("kma-admin".equals(role.roleCode()) && "disabled".equals(status)) {
+                throw new KmaException(409, "系统管理员角色不可停用");
+            }
+            jdbc.update("UPDATE kma_role SET status=?,update_time=now() WHERE role_id=?", status, roleId);
+            invalidateRoleMembers(roleId);
+            audit.recordRequired("role_change", "warning", "role.status.update", "role:" + roleId,
+                Map.of("roleCode", role.roleCode()), Map.of("status", status), Map.of());
+        }
+        if (administrationGuard != null) administrationGuard.assertOperationalAdmins();
+    }
+
+    public List<Map<String, Object>> listRoleUsers(Long roleId) {
+        requireRole(roleId);
+        return jdbc.queryForList("""
+            SELECT u.user_id,u.username,u.display_name,u.identity_provider,u.status
+            FROM kma_user u
+            JOIN kma_user_role ur ON ur.user_id=u.user_id
+            WHERE ur.role_id=? ORDER BY u.username
+            """, roleId);
+    }
+
     private Set<String> normalizePermissions(Set<String> requested) {
         Set<String> selected = requested == null ? new LinkedHashSet<>() : new LinkedHashSet<>(requested);
         if (selected.contains("kma:admin")) throw new KmaException(403, "kma:admin 不能通过角色编辑分配");
@@ -179,6 +238,16 @@ public class KmaRoleAdminService {
                 SELECT user_id FROM kma_user_role WHERE role_id=?
             )
             """, roleId);
+    }
+
+    private String permissionModule(String code) {
+        if (code == null) return "系统管理";
+        if (code.startsWith("user:") || code.startsWith("role:") || code.startsWith("org:") || code.startsWith("permission:")) return "组织权限";
+        if (code.startsWith("content:") || code.startsWith("topic:") || code.startsWith("portal:")) return "内容治理";
+        if (code.startsWith("space:") || code.startsWith("document:") || code.startsWith("dataset:") || code.startsWith("vector:")) return "知识技术";
+        if (code.startsWith("retrieval:") || code.startsWith("qa:") || code.startsWith("eval:") || code.startsWith("rag:")) return "检索与 AI";
+        if (code.startsWith("task:") || code.startsWith("audit:") || code.startsWith("storage:") || code.startsWith("model:") || code.startsWith("system:")) return "高级运维";
+        return "系统管理";
     }
 
     private RoleState requireRole(Long roleId) {

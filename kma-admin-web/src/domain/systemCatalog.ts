@@ -46,6 +46,14 @@ export function roleStatusMeta(status?: string): DisplayMeta {
   return ROLE_STATUS[status || ''] || { ...UNKNOWN_META, label: status || UNKNOWN_META.label }
 }
 
+export function userStatusMeta(status?: string): DisplayMeta {
+  return ROLE_STATUS[status || ''] || { ...UNKNOWN_META, label: status || UNKNOWN_META.label }
+}
+
+export function orgStatusMeta(status?: string): DisplayMeta {
+  return ROLE_STATUS[status || ''] || { ...UNKNOWN_META, label: status || UNKNOWN_META.label }
+}
+
 export function modelCapabilityMeta(capability?: string): DisplayMeta {
   return (
     MODEL_CAPABILITIES[capability || ''] || {

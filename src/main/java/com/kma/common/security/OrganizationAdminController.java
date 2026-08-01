@@ -3,6 +3,7 @@ package com.kma.common.security;
 import com.kma.common.result.ApiResult;
 import com.kma.common.result.PageResult;
 import com.kma.common.security.dto.OrganizationCreateRequest;
+import com.kma.common.security.dto.OrganizationMemberAddRequest;
 import com.kma.common.security.dto.OrganizationMoveRequest;
 import com.kma.common.security.dto.OrganizationNode;
 import com.kma.common.security.dto.OrganizationUpdateRequest;
@@ -63,6 +64,21 @@ public class OrganizationAdminController {
     @PreAuthorize("@ss.hasPermi('org:read')")
     public ApiResult<List<Map<String, Object>>> members(@PathVariable Long orgId) {
         return ApiResult.success(service.members(orgId));
+    }
+
+    @PostMapping("/organizations/{orgId}/members")
+    @PreAuthorize("@ss.hasPermi('org:member:manage')")
+    public ApiResult<Void> addMembers(@PathVariable Long orgId,
+        @Valid @RequestBody OrganizationMemberAddRequest request) {
+        service.addMembers(orgId, request.userIds(), request.primary());
+        return ApiResult.success();
+    }
+
+    @DeleteMapping("/organizations/{orgId}/members/{userId}")
+    @PreAuthorize("@ss.hasPermi('org:member:manage')")
+    public ApiResult<Void> removeMember(@PathVariable Long orgId, @PathVariable Long userId) {
+        service.removeMember(orgId, userId);
+        return ApiResult.success();
     }
 
     @GetMapping("/organizations/{orgId}/members/page")

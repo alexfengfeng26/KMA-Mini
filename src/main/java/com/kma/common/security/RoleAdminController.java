@@ -2,6 +2,7 @@ package com.kma.common.security;
 
 import com.kma.common.result.ApiResult;
 import com.kma.common.security.dto.PermissionNode;
+import com.kma.common.security.dto.RoleBatchStatusRequest;
 import com.kma.common.security.dto.RoleUpsertRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +46,23 @@ public class RoleAdminController {
     @DeleteMapping("/roles/{roleId}")
     @PreAuthorize("@ss.hasPermi('role:delete')")
     public ApiResult<Void> delete(@PathVariable Long roleId) { service.delete(roleId); return ApiResult.success(); }
+
+    @PostMapping("/roles/{roleId}/clone")
+    @PreAuthorize("@ss.hasPermi('role:create')")
+    public ApiResult<Long> clone(@PathVariable Long roleId) { return ApiResult.success(service.clone(roleId)); }
+
+    @PutMapping("/roles/batch/status")
+    @PreAuthorize("@ss.hasPermi('role:update')")
+    public ApiResult<Void> batchStatus(@Valid @RequestBody RoleBatchStatusRequest request) {
+        service.batchChangeStatus(request.roleIds(), request.status());
+        return ApiResult.success();
+    }
+
+    @GetMapping("/roles/{roleId}/users")
+    @PreAuthorize("@ss.hasPermi('role:read')")
+    public ApiResult<List<Map<String, Object>>> roleUsers(@PathVariable Long roleId) {
+        return ApiResult.success(service.listRoleUsers(roleId));
+    }
 
     @GetMapping("/permissions/tree")
     @PreAuthorize("@ss.hasPermi('permission:read')")

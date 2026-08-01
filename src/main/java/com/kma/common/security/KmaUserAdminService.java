@@ -65,6 +65,7 @@ public class KmaUserAdminService {
     }
 
     public PageResult<Map<String, Object>> page(int pageNum, int pageSize, String keyword,
+                                                String status, String roleCode, Long orgId,
                                                 String sortBy, String sortOrder) {
         String normalizedKeyword = keyword == null ? "" : keyword.trim();
         String pattern = "%" + normalizedKeyword + "%";
@@ -72,13 +73,31 @@ public class KmaUserAdminService {
             case "username" -> "u.username";
             case "displayName" -> "u.display_name";
             case "status" -> "u.status";
+            case "lastLoginTime" -> "u.last_login_time";
             default -> "u.create_time";
         };
         String direction = "asc".equalsIgnoreCase(sortOrder) ? "ASC" : "DESC";
-        Long total = jdbc.queryForObject("""
-            SELECT count(*) FROM kma_user u
-            WHERE (?='' OR u.username ILIKE ? OR COALESCE(u.display_name,'') ILIKE ?)
-            """, Long.class, normalizedKeyword, pattern, pattern);
+
+        StringBuilder where = new StringBuilder(" WHERE (?='' OR u.username ILIKE ? OR COALESCE(u.display_name,'') ILIKE ?)");
+        java.util.List<Object> args = new java.util.ArrayList<>();
+        args.add(normalizedKeyword);
+        args.add(pattern);
+        args.add(pattern);
+        if (status != null && !status.isBlank()) {
+            where.append(" AND u.status=?");
+            args.add(status);
+        }
+        if (roleCode != null && !roleCode.isBlank()) {
+            where.append(" AND EXISTS (SELECT 1 FROM kma_user_role filter_ur JOIN kma_role filter_r ON filter_r.role_id=filter_ur.role_id WHERE filter_ur.user_id=u.user_id AND filter_r.role_code=?)");
+            args.add(roleCode);
+        }
+        if (orgId != null) {
+            where.append(" AND EXISTS (SELECT 1 FROM kma_user_org filter_uo WHERE filter_uo.user_id=u.user_id AND filter_uo.org_id=?)");
+            args.add(orgId);
+        }
+
+        Long total = jdbc.queryForObject(
+            "SELECT count(*) FROM kma_user u" + where, Long.class, args.toArray());
         List<Map<String, Object>> rows = jdbc.queryForList("""
             SELECT u.user_id, u.username, u.display_name, u.identity_provider, u.status,
                    u.must_change_password, u.last_login_time, u.create_time,
@@ -89,18 +108,45 @@ public class KmaUserAdminService {
             LEFT JOIN kma_role r ON r.role_id=ur.role_id
             LEFT JOIN kma_user_org uo ON uo.user_id=u.user_id
             LEFT JOIN kma_org o ON o.org_id=uo.org_id
-            WHERE (?='' OR u.username ILIKE ? OR COALESCE(u.display_name,'') ILIKE ?)
+            """ + where + """
             GROUP BY u.user_id
             ORDER BY %s %s, u.user_id DESC
             LIMIT ? OFFSET ?
-            """.formatted(orderColumn, direction), normalizedKeyword, pattern, pattern,
-            pageSize, (pageNum - 1) * pageSize);
+            """.formatted(orderColumn, direction),
+            java.util.stream.Stream.concat(args.stream(), java.util.stream.Stream.of(pageSize, (pageNum - 1) * pageSize)).toArray());
         return new PageResult<>(rows, total == null ? 0 : total, pageNum, pageSize);
     }
 
+    public Map<String, Object> detail(Long userId) {
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+            SELECT u.user_id, u.username, u.display_name, u.identity_provider, u.status,
+                   u.must_change_password, u.last_login_time, u.create_time,
+                   COALESCE(string_agg(DISTINCT r.role_code, ',' ORDER BY r.role_code), '') AS roles,
+                   COALESCE(string_agg(DISTINCT o.name, ',' ORDER BY o.name), '') AS organizations
+            FROM kma_user u
+            LEFT JOIN kma_user_role ur ON ur.user_id=u.user_id
+            LEFT JOIN kma_role r ON r.role_id=ur.role_id
+            LEFT JOIN kma_user_org uo ON uo.user_id=u.user_id
+            LEFT JOIN kma_org o ON o.org_id=uo.org_id
+            WHERE u.user_id=?
+            GROUP BY u.user_id
+            """, userId);
+        if (rows.isEmpty()) throw new KmaException(404, "用户不存在");
+        return rows.getFirst();
+    }
+
     @Transactional(transactionManager = "knowledgeTransactionManager")
-    public Long create(UserCreateRequest request) {
+    public Map<String, Object> create(UserCreateRequest request) {
         validateAssignableRoles(request.getRoles());
+        String initialPassword = request.getInitialPassword();
+        String generatedPassword = null;
+        if (request.isGeneratePassword()) {
+            generatedPassword = generateTemporaryPassword();
+            initialPassword = generatedPassword;
+        }
+        if (initialPassword == null || initialPassword.length() < 12) {
+            throw new KmaException(400, "初始密码至少 12 个字符");
+        }
         Long userId;
         try {
             userId = jdbc.queryForObject("""
@@ -108,7 +154,7 @@ public class KmaUserAdminService {
                                      identity_provider, status, must_change_password)
                 VALUES (?, ?, ?, 'local', 'active', true) RETURNING user_id
                 """, Long.class, request.getUsername(), request.getDisplayName(),
-                passwordEncoder.encode(request.getInitialPassword()));
+                passwordEncoder.encode(initialPassword));
         } catch (DataIntegrityViolationException ex) {
             throw new KmaException(409, "用户名已存在或账号数据无效");
         }
@@ -128,8 +174,20 @@ public class KmaUserAdminService {
             WHERE org_code='root' AND status='active'
             """, userId);
         if (organizationAssigned != 1) throw new KmaException(500, "根组织不存在或不可用");
-        record("user.create", "user:" + userId, Map.of("username", request.getUsername(), "roles", request.getRoles()));
-        return userId;
+        record("user.create", "user:" + userId, Map.of("username", request.getUsername(), "roles", request.getRoles(),
+            "generatePassword", request.isGeneratePassword()));
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("userId", userId);
+        if (generatedPassword != null) result.put("generatedPassword", generatedPassword);
+        return result;
+    }
+
+    private String generateTemporaryPassword() {
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#%&*";
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        StringBuilder password = new StringBuilder(16);
+        for (int i = 0; i < 16; i++) password.append(chars.charAt(random.nextInt(chars.length())));
+        return password.toString();
     }
 
     @Transactional(transactionManager = "knowledgeTransactionManager")
@@ -166,6 +224,25 @@ public class KmaUserAdminService {
             administrationGuard.assertOperationalAdmins();
         }
         record("user.status.update", "user:" + userId, Map.of("status", status));
+    }
+
+    @Transactional(transactionManager = "knowledgeTransactionManager")
+    public void batchChangeStatus(List<Long> userIds, String status) {
+        for (Long userId : userIds) {
+            changeStatus(userId, status);
+        }
+    }
+
+    @Transactional(transactionManager = "knowledgeTransactionManager")
+    public Map<String, String> batchResetPassword(List<Long> userIds) {
+        Map<String, String> passwords = new java.util.LinkedHashMap<>();
+        for (Long userId : userIds) {
+            String generated = generateTemporaryPassword();
+            resetPassword(userId, generated);
+            Map<String, Object> detail = detail(userId);
+            passwords.put(String.valueOf(detail.get("username")), generated);
+        }
+        return passwords;
     }
 
     @Transactional(transactionManager = "knowledgeTransactionManager")

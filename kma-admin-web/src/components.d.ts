@@ -65,6 +65,7 @@ declare module 'vue' {
     FormDialog: typeof import('./components/FormDialog.vue')['default']
     PageHeader: typeof import('./components/PageHeader.vue')['default']
     PageState: typeof import('./components/PageState.vue')['default']
+    PermissionTree: typeof import('./components/PermissionTree.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SpaceSelect: typeof import('./components/SpaceSelect.vue')['default']
